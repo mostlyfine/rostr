@@ -1,0 +1,19 @@
+{
+  "include": ["server/**/*.ts", "common/**/*.ts", "test/server/**/*.ts"],
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@common/*": ["./common/*"]
+    }
+  }
+}
