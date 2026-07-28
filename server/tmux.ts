@@ -12,17 +12,21 @@ const SESSION_PREFIX = "ma-";
 /**
  * ユーザーの ~/.tmux.conf を読ませないための最小設定。
  * prefix を殺しておかないと C-b などが tmux に吸われて Claude の TUI に届かない。
+ * prefix が None なら prefix テーブルには到達しようがないので、unbind-key -a は置かない。
+ * 置くと 2 回目以降の source-file が「table prefix doesn't exist」で失敗する。
  */
 const TMUX_CONF = [
   "set -g prefix None",
   "set -g prefix2 None",
-  "unbind-key -a",
   "set -g status off",
   // 最後に attach したクライアント（＝ブラウザ）の寸法に追従させる。
   "set -g window-size latest",
   "set -g escape-time 0",
   "set -g history-limit 100000",
-  "set -g mouse off",
+  // ホイールを tmux まで届けるための唯一の設定。root の既定バインド
+  // WheelUpPane -> copy-mode -e がそのまま履歴の入口になり、最下部まで戻ると自動で抜ける。
+  // 代償として、ブラウザでの文字選択は Option(Mac) / Shift を押しながらのドラッグになる。
+  "set -g mouse on",
   'set -g default-terminal "xterm-256color"',
   "set -g allow-passthrough on",
   "",
@@ -128,6 +132,13 @@ export const buildKillArgs = (socket: string, name: string): string[] => [
   exactTarget(name),
 ];
 
+export const buildSourceFileArgs = (socket: string, conf: string): string[] => [
+  "-L",
+  socket,
+  "source-file",
+  conf,
+];
+
 export const buildListArgs = (socket: string): string[] => [
   "-L",
   socket,
@@ -168,6 +179,15 @@ export const startTmuxSession = (options: NewSessionOptions): void => {
   if (result.status === 0) return;
   const reason = result.stderr?.trim() || result.error?.message || `exit ${result.status}`;
   throw new Error(`tmux セッションを開始できません: ${reason}`);
+};
+
+/**
+ * -f で渡した設定は tmux サーバの起動時にしか読まれない。
+ * 既に動いているサーバにも新しい設定を届けるため、繋ぐ前に読み直させる。
+ * サーバがまだ無ければ失敗するが、その場合は new-session の -f が読むので放っておく。
+ */
+export const reloadTmuxConf = (socket: string, conf: string): void => {
+  spawnSync("tmux", buildSourceFileArgs(socket, conf), { stdio: "ignore" });
 };
 
 export const killTmuxSession = (socket: string, name: string): void => {
