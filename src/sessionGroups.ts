@@ -7,11 +7,11 @@ export const NOTABLE_STATES: AgentState[] = ["waiting", "done"];
 export const STATE_ORDER: AgentState[] = ["done", "waiting", "working", "idle", "exited"];
 
 export const STATE_LABEL: Record<AgentState, string> = {
-  waiting: "要対応",
-  working: "実行中",
-  done: "完了",
-  idle: "待機",
-  exited: "終了",
+  waiting: "Needs Attention",
+  working: "Running",
+  done: "Done",
+  idle: "Idle",
+  exited: "Exited",
 };
 
 /** サイドバーの1行。見出しとセッションを同じ列に混ぜて並べる。 */

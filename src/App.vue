@@ -122,7 +122,7 @@ const onSubmit = async (cwd: string) => {
           :visible="id === selectedId"
         />
         <p v-if="!selectedId" class="placeholder">
-          左のサイドバーからエージェントを選ぶか、「+ 新規」で起動してください。
+          Select an agent from the sidebar, or launch one with "+ New".
         </p>
       </div>
     </main>

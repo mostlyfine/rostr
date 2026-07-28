@@ -21,15 +21,15 @@ const onSubmit = () => {
 <template>
   <div class="backdrop" @click.self="emit('cancel')">
     <form class="dialog" @submit.prevent="onSubmit">
-      <h2>新しいエージェントを起動</h2>
+      <h2>Launch New Agent</h2>
 
       <label>
-        作業ディレクトリ（絶対パス）
+        Working Directory (absolute path)
         <input ref="input" v-model="cwd" type="text" placeholder="/Users/you/src/project" spellcheck="false" />
       </label>
 
       <div v-if="recentDirs.length > 0" class="recent">
-        <span class="recent-label">最近使ったディレクトリ</span>
+        <span class="recent-label">Recent Directories</span>
         <button
           v-for="dir in recentDirs"
           :key="dir"
@@ -45,9 +45,9 @@ const onSubmit = () => {
       <p v-if="props.error" class="error">{{ props.error }}</p>
 
       <div class="actions">
-        <button type="button" data-test="cancel" @click="emit('cancel')">キャンセル</button>
+        <button type="button" data-test="cancel" @click="emit('cancel')">Cancel</button>
         <button type="submit" class="primary" data-test="submit" :disabled="props.busy">
-          {{ props.busy ? "起動中…" : "起動" }}
+          {{ props.busy ? "Launching…" : "Launch" }}
         </button>
       </div>
     </form>

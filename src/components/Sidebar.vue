@@ -25,13 +25,13 @@ const { label: themeLabel, toggle: toggleTheme } = useTheme();
         >
           {{ themeLabel.icon }}
         </button>
-        <button class="new" data-test="new-session" @click="emit('create')">+ 新規</button>
+        <button class="new" data-test="new-session" @click="emit('create')">+ New</button>
       </div>
     </header>
 
     <div class="list">
       <p v-if="props.sessions.length === 0" class="empty">
-        エージェントがありません。「+ 新規」から起動してください。
+        No agents. Click "+ New" to launch one.
       </p>
 
       <TransitionGroup tag="ul" name="row" class="rows">

@@ -12,8 +12,8 @@ watchEffect(() => {
 });
 
 const LABELS: Record<Theme, { icon: string; title: string }> = {
-  light: { icon: "☀", title: "テーマ: ライト" },
-  dark: { icon: "🌙", title: "テーマ: ダーク" },
+  light: { icon: "☀", title: "Theme: Light" },
+  dark: { icon: "🌙", title: "Theme: Dark" },
 };
 
 export const useTheme = () => {

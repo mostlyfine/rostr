@@ -34,14 +34,14 @@ const select = () => {
         <span class="title">{{ props.session.title }}</span>
       </div>
       <p class="prompt" :class="{ empty: !props.session.prompt }">
-        {{ props.session.prompt || "プロンプト未入力" }}
+        {{ props.session.prompt || "No prompt entered" }}
       </p>
       <p v-if="props.session.activity" class="activity">{{ props.session.activity }}</p>
     </div>
     <button
       class="close"
       data-test="session-close"
-      title="このエージェントを終了する"
+      title="Close this agent"
       @click.stop="emit('close', props.session.id)"
     >
       ×

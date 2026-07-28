@@ -54,7 +54,7 @@ describe("toSidebarRows", () => {
 
   it("見出しはラベルと件数を持つ", () => {
     const rows = toSidebarRows([session({ id: "a" }), session({ id: "b" })]);
-    expect(rows[0]).toMatchObject({ kind: "header", state: "idle", label: "待機", count: 2 });
+    expect(rows[0]).toMatchObject({ kind: "header", state: "idle", label: "Idle", count: 2 });
   });
 
   it("該当セッションが無い状態の見出しは並べない", () => {
@@ -85,19 +85,19 @@ describe("Sidebar", () => {
       },
     });
     const headings = wrapper.findAll("[data-test=group-label]").map((el) => el.text());
-    expect(headings).toEqual(["完了", "要対応", "実行中"]);
+    expect(headings).toEqual(["Done", "Needs Attention", "Running"]);
   });
 
   it("該当セッションが無い状態のグループは描画しない", () => {
     const wrapper = mount(Sidebar, {
       props: { sessions: [session({ state: "idle" })], selectedId: null },
     });
-    expect(wrapper.findAll("[data-test=group-label]").map((el) => el.text())).toEqual(["待機"]);
+    expect(wrapper.findAll("[data-test=group-label]").map((el) => el.text())).toEqual(["Idle"]);
   });
 
   it("セッションが無いときは案内を出す", () => {
     const wrapper = mount(Sidebar, { props: { sessions: [], selectedId: null } });
-    expect(wrapper.text()).toContain("エージェントがありません");
+    expect(wrapper.text()).toContain("No agents.");
   });
 
   it("新規作成ボタンで create を emit する", async () => {
@@ -146,7 +146,7 @@ describe("SessionItem", () => {
 
   it("プロンプトが空ならプレースホルダを出す", () => {
     const wrapper = mount(SessionItem, { props: { session: session({}), selected: false } });
-    expect(wrapper.text()).toContain("プロンプト未入力");
+    expect(wrapper.text()).toContain("No prompt entered");
   });
 
   it("クリックで select を emit する", async () => {

@@ -53,7 +53,7 @@ export const useSessions = () => {
       body: JSON.stringify({ cwd }),
     });
     const body = await res.json();
-    if (!res.ok) throw new Error(body?.error ?? "起動に失敗しました");
+    if (!res.ok) throw new Error(body?.error ?? "Failed to launch");
     return body as Session;
   };
 
