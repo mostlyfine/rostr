@@ -92,6 +92,17 @@ describe("applyHookEvent", () => {
     expect(patch).toMatchObject({ state: "waiting", activity: "Claude needs your permission to use Bash" });
   });
 
+  // idle_prompt は「一定時間操作が無い」という単なる催促で、人の対応が要る通知ではない。
+  // ここまで waiting にすると、/clear 後に放置しただけの行が「要対応」に化けてしまう。
+  it("Notification の idle_prompt は放置しているだけなので状態を変えない", () => {
+    const patch = applyHookEvent(base, {
+      hook_event_name: "Notification",
+      message: "Claude is waiting for your input",
+      notification_type: "idle_prompt",
+    });
+    expect(patch).toEqual({});
+  });
+
   it("Stop で done になり activity が消える", () => {
     const patch = applyHookEvent({ ...base, state: "working", activity: "Bash ls" }, { hook_event_name: "Stop" });
     expect(patch).toMatchObject({ state: "done", activity: "" });
