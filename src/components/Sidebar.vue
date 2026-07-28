@@ -2,19 +2,31 @@
 import { computed } from "vue";
 import type { Session } from "../../common/types";
 import { toSidebarRows } from "../sessionGroups";
+import { useTheme } from "../composables/useTheme";
 import SessionItem from "./SessionItem.vue";
 
 const props = defineProps<{ sessions: Session[]; selectedId: string | null }>();
 const emit = defineEmits<{ select: [id: string]; close: [id: string]; create: [] }>();
 
 const rows = computed(() => toSidebarRows(props.sessions));
+const { label: themeLabel, cycle: cycleTheme } = useTheme();
 </script>
 
 <template>
   <aside class="sidebar">
     <header class="header">
       <h1>rostr</h1>
-      <button class="new" data-test="new-session" @click="emit('create')">+ 新規</button>
+      <div class="actions">
+        <button
+          class="theme"
+          data-test="theme-toggle"
+          :title="themeLabel.title"
+          @click="cycleTheme()"
+        >
+          {{ themeLabel.icon }}
+        </button>
+        <button class="new" data-test="new-session" @click="emit('create')">+ 新規</button>
+      </div>
     </header>
 
     <div class="list">
@@ -47,32 +59,44 @@ const rows = computed(() => toSidebarRows(props.sessions));
   flex: none;
   display: flex;
   flex-direction: column;
-  background: #161a22;
-  border-right: 1px solid #262c38;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
 }
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px;
-  border-bottom: 1px solid #262c38;
+  border-bottom: 1px solid var(--border);
 }
 h1 {
   margin: 0;
   font-size: 14px;
-  color: #e6e9ef;
+  color: var(--text-strong);
 }
-.new {
-  border: 1px solid #3b4252;
-  background: #232a36;
-  color: #d8dee9;
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.new,
+.theme {
+  border: 1px solid var(--border-control);
+  background: var(--bg-control);
+  color: var(--text);
   font-size: 12px;
   padding: 4px 10px;
   border-radius: 5px;
   cursor: pointer;
 }
-.new:hover {
-  background: #2d3644;
+.new:hover,
+.theme:hover {
+  background: var(--bg-control-hover);
+}
+/* 絵文字1文字なので、+ 新規 と高さを揃えつつ左右を詰める。 */
+.theme {
+  padding: 4px 7px;
+  line-height: 1.35;
 }
 .list {
   flex: 1;
@@ -80,7 +104,7 @@ h1 {
   padding: 8px;
 }
 .empty {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.6;
   padding: 8px;
@@ -93,14 +117,14 @@ h1 {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: #8b93a3;
+  color: var(--text-tertiary);
 }
 .group-label:not(:first-child) {
   margin-top: 12px;
 }
 .count {
-  background: #262c38;
-  color: #b9c0cd;
+  background: var(--bg-badge);
+  color: var(--text-secondary);
   border-radius: 8px;
   padding: 0 6px;
   font-size: 10px;

@@ -120,23 +120,23 @@ const onSubmit = async (cwd: string) => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #0d1117;
+  background: var(--bg-app);
 }
 .main-header {
   display: flex;
   align-items: baseline;
   gap: 10px;
   padding: 8px 12px;
-  border-bottom: 1px solid #262c38;
+  border-bottom: 1px solid var(--border);
 }
 .main-title {
   font-size: 13px;
   font-weight: 600;
-  color: #e6e9ef;
+  color: var(--text-strong);
 }
 .main-cwd {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
 .terminals {
@@ -145,7 +145,7 @@ const onSubmit = async (cwd: string) => {
   min-height: 0;
 }
 .placeholder {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 13px;
   padding: 24px;
 }

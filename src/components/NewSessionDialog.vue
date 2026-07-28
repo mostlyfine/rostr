@@ -58,7 +58,7 @@ const onSubmit = () => {
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--bg-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -66,8 +66,8 @@ const onSubmit = () => {
 .dialog {
   width: 480px;
   max-width: 90vw;
-  background: #1b202a;
-  border: 1px solid #2f3746;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   padding: 18px;
   display: flex;
@@ -77,27 +77,27 @@ const onSubmit = () => {
 h2 {
   margin: 0;
   font-size: 15px;
-  color: #e6e9ef;
+  color: var(--text-strong);
 }
 label {
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-size: 12px;
-  color: #b9c0cd;
+  color: var(--text-secondary);
 }
 input {
-  background: #11151c;
-  border: 1px solid #2f3746;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 8px 10px;
-  color: #e6e9ef;
+  color: var(--text-strong);
   font-size: 13px;
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
 input:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--focus-ring);
 }
 .recent {
   display: flex;
@@ -108,13 +108,13 @@ input:focus {
 }
 .recent-label {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 .recent-item {
   text-align: left;
   background: transparent;
   border: none;
-  color: #8fb3e0;
+  color: var(--text-link);
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, monospace;
   padding: 3px 6px;
@@ -122,12 +122,12 @@ input:focus {
   cursor: pointer;
 }
 .recent-item:hover {
-  background: #232a36;
+  background: var(--bg-control);
 }
 .error {
   margin: 0;
   font-size: 12px;
-  color: #f87171;
+  color: var(--text-danger);
 }
 .actions {
   display: flex;
@@ -135,18 +135,18 @@ input:focus {
   gap: 8px;
 }
 .actions button {
-  border: 1px solid #3b4252;
-  background: #232a36;
-  color: #d8dee9;
+  border: 1px solid var(--border-control);
+  background: var(--bg-control);
+  color: var(--text);
   font-size: 12px;
   padding: 6px 14px;
   border-radius: 6px;
   cursor: pointer;
 }
 .actions .primary {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
 }
 .actions button:disabled {
   opacity: 0.6;
