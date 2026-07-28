@@ -12,6 +12,7 @@ import {
   isTmuxAvailable,
   killTmuxSession,
   listTmuxSessions,
+  reloadTmuxConf,
   startTmuxSession,
   tmuxSessionName,
   writeTmuxConf,
@@ -116,6 +117,7 @@ export class SessionManager {
 
     if (this.useTmux) {
       const name = tmuxSessionName(id);
+      reloadTmuxConf(this.tmuxSocket, this.tmuxConf());
       startTmuxSession({
         socket: this.tmuxSocket,
         conf: this.tmuxConf(),
@@ -154,8 +156,14 @@ export class SessionManager {
   recover(): number {
     if (!this.useTmux) return 0;
 
+    const infos = listTmuxSessions(this.tmuxSocket);
+    if (infos.length === 0) return 0;
+
+    // 古い設定のまま動き続けているサーバにも、今の設定を届けてから繋ぎ直す。
+    reloadTmuxConf(this.tmuxSocket, this.tmuxConf());
+
     let recovered = 0;
-    for (const info of listTmuxSessions(this.tmuxSocket)) {
+    for (const info of infos) {
       if (this.entries.has(info.id)) continue;
       const name = tmuxSessionName(info.id);
       const session: Session = {

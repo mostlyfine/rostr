@@ -36,6 +36,9 @@ onMounted(() => {
     fontSize: 13,
     cursorBlink: true,
     allowProposedApi: true,
+    // tmux 経由では代替画面なので効かない（履歴は tmux 側にある）。
+    // tmux が無い環境ではこれが唯一のスクロールバックになる。
+    scrollback: 10_000,
     theme: { background: "#0d1117", foreground: "#d8dee9" },
   });
   fitAddon = new FitAddon();
