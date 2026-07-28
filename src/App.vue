@@ -5,10 +5,8 @@ import NewSessionDialog from "./components/NewSessionDialog.vue";
 import TerminalView from "./components/TerminalView.vue";
 import { useSessions } from "./composables/useSessions";
 import { rememberRecentDir } from "./recentDirs";
+import { NOTABLE_STATES } from "./sessionGroups";
 import type { AgentState, Session } from "../common/types";
-
-/** ユーザーの目を引きたい状態。SessionItem.vue の点滅対象と同じ。 */
-const NOTABLE: AgentState[] = ["waiting", "done"];
 
 const { sessions, create, close } = useSessions();
 
@@ -52,7 +50,12 @@ const select = async (id: string) => {
 const focusNewlyNotable = (list: Session[]) => {
   const newlyNotable = list.find((session) => {
     const prev = prevStates.get(session.id);
-    return prev !== undefined && !NOTABLE.includes(prev) && NOTABLE.includes(session.state) && session.id !== selectedId.value;
+    return (
+      prev !== undefined &&
+      !NOTABLE_STATES.includes(prev) &&
+      NOTABLE_STATES.includes(session.state) &&
+      session.id !== selectedId.value
+    );
   });
   if (!newlyNotable) return;
   const selectedIsBusy = !!selectedId.value && (terminals.get(selectedId.value)?.hasFocus() ?? false);

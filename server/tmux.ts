@@ -1,7 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { writeSettingsFile } from "./settingsDir";
 
 /** ユーザー個人の tmux サーバと混ざらないよう、専用ソケットで動かす。 */
 export const DEFAULT_TMUX_SOCKET = "rostr";
@@ -69,13 +67,7 @@ export const sessionIdFromName = (name: string): string | undefined => {
 };
 
 /** 設定を一時ファイルへ書き出し、そのパスを返す。 */
-export const writeTmuxConf = (): string => {
-  const dir = join(tmpdir(), "rostr-settings");
-  mkdirSync(dir, { recursive: true });
-  const path = join(dir, "tmux.conf");
-  writeFileSync(path, TMUX_CONF, "utf8");
-  return path;
-};
+export const writeTmuxConf = (): string => writeSettingsFile("tmux.conf", TMUX_CONF);
 
 /**
  * tmux の子プロセスは tmux サーバ起動時の環境を継承するので、node-pty に渡した env は届かない。

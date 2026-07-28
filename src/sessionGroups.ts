@@ -1,5 +1,8 @@
 import type { AgentState, Session } from "../common/types";
 
+/** ユーザーの目を引きたい状態。これ以上は勝手に進まず、人の操作を待っている。 */
+export const NOTABLE_STATES: AgentState[] = ["waiting", "done"];
+
 /** サイドバーでの表示順。人の番が回ってきたものを上に置き、まだ手が要らないものを下にする。 */
 export const STATE_ORDER: AgentState[] = ["done", "waiting", "working", "idle", "exited"];
 

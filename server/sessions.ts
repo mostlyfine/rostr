@@ -80,6 +80,18 @@ const DEFAULT_ROWS = 30;
 /** SIGTERM で死ななかった場合に SIGKILL へ切り替えるまでの猶予。 */
 const KILL_GRACE_MS = 3_000;
 
+/** 起動直後・復元直後の Session を組み立てる。状態やプロンプトは hook が来るまで空のまま。 */
+const makeIdleSession = (id: string, cwd: string, createdAt: number): Session => ({
+  id,
+  cwd,
+  title: basename(cwd) || cwd,
+  state: "idle",
+  prompt: "",
+  activity: "",
+  createdAt,
+  updatedAt: Date.now(),
+});
+
 export class SessionManager {
   private readonly entries = new Map<string, Entry>();
   private readonly changeListeners = new Set<ChangeListener>();
@@ -87,6 +99,7 @@ export class SessionManager {
   private readonly useTmux: boolean;
   private readonly tmuxSocket: string;
   private tmuxConfPath?: string;
+  private tmuxConfLoaded = false;
 
   constructor(private readonly options: SessionManagerOptions) {
     this.scrollbackChars = options.scrollbackChars ?? DEFAULT_SCROLLBACK_CHARS;
@@ -113,21 +126,11 @@ export class SessionManager {
     }
 
     const id = randomUUID();
-    const now = Date.now();
-    const session: Session = {
-      id,
-      cwd: absolute,
-      title: basename(absolute) || absolute,
-      state: "idle",
-      prompt: "",
-      activity: "",
-      createdAt: now,
-      updatedAt: now,
-    };
+    const session = makeIdleSession(id, absolute, Date.now());
 
     if (this.useTmux) {
       const name = tmuxSessionName(id);
-      reloadTmuxConf(this.tmuxSocket, this.tmuxConf());
+      this.ensureTmuxConfLoaded();
       startTmuxSession({
         socket: this.tmuxSocket,
         conf: this.tmuxConf(),
@@ -170,22 +173,13 @@ export class SessionManager {
     if (infos.length === 0) return 0;
 
     // 古い設定のまま動き続けているサーバにも、今の設定を届けてから繋ぎ直す。
-    reloadTmuxConf(this.tmuxSocket, this.tmuxConf());
+    this.ensureTmuxConfLoaded();
 
     let recovered = 0;
     for (const info of infos) {
       if (this.entries.has(info.id)) continue;
       const name = tmuxSessionName(info.id);
-      const session: Session = {
-        id: info.id,
-        cwd: info.cwd,
-        title: basename(info.cwd) || info.cwd,
-        state: "idle",
-        prompt: "",
-        activity: "",
-        createdAt: info.createdAt,
-        updatedAt: Date.now(),
-      };
+      const session = makeIdleSession(info.id, info.cwd, info.createdAt);
       this.register(session, this.attach(name), name);
       recovered += 1;
     }
@@ -285,6 +279,13 @@ export class SessionManager {
   private tmuxConf(): string {
     this.tmuxConfPath ??= writeTmuxConf();
     return this.tmuxConfPath;
+  }
+
+  /** 動いている tmux サーバへの読み直しは、この設定で一度届けていれば済む。 */
+  private ensureTmuxConfLoaded(): void {
+    if (this.tmuxConfLoaded) return;
+    reloadTmuxConf(this.tmuxSocket, this.tmuxConf());
+    this.tmuxConfLoaded = true;
   }
 
   /** 既存の tmux セッションへ繋ぐクライアントを PTY として起動する。 */
