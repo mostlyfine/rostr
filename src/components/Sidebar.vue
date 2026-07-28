@@ -115,7 +115,7 @@ h1 {
   gap: 6px;
   padding: 2px 4px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-tertiary);
 }
