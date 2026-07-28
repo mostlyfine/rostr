@@ -87,6 +87,10 @@ Scrolling the wheel up in the terminal moves back through earlier output.
 - Because tmux now receives mouse events, dragging becomes a tmux selection (copy-mode). To select text in the browser instead, hold Option (Mac) or Shift while dragging, then copy it with `Cmd+C` (`Ctrl+Shift+C` elsewhere).
 - Without tmux, or with `ROSTR_TMUX=0`, you scroll through xterm.js's own scrollback (10,000 lines).
 
+### Inserting a newline in the prompt
+
+Press `Shift+Enter` to insert a newline instead of submitting the prompt. In a browser the key would otherwise reach the agent as a plain Enter, so the terminal sends the `ESC` + `CR` sequence that `claude`'s own `/terminal-setup` configures for iTerm2 and VS Code. Plain `Enter` still submits.
+
 ### Process persistence with tmux
 
 With tmux, agents keep running whether you stop the server or it crashes. On the next start, sessions whose names begin with `rostr-` are picked up from `tmux list-sessions`, re-attached, and put back in the list.
