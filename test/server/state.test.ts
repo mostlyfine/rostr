@@ -125,4 +125,12 @@ describe("applyHookEvent", () => {
     const patch = applyHookEvent(base, { hook_event_name: "UserPromptSubmit", prompt: "a\nb" });
     expect(patch.prompt).toBe("a b");
   });
+
+  it("task-notification由来のprompt(バックグラウンドタスク完了通知)は無視する", () => {
+    const patch = applyHookEvent(
+      { ...base, state: "working", prompt: "元のプロンプト", activity: "Bash npm test" },
+      { hook_event_name: "UserPromptSubmit", prompt: "<task-notification>agent finished</task-notification>" },
+    );
+    expect(patch).toEqual({});
+  });
 });
