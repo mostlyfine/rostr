@@ -44,12 +44,17 @@ export const summarizeTool = (toolName: string, toolInput?: Record<string, unkno
 /**
  * hook イベントを現在のセッションに適用し、変更したいフィールドだけを返す純関数。
  * 変更が無い場合は空オブジェクトを返す。
+ *
+ * exited は他の状態と同じ扱いで、後から来たイベントで上書きされる。worktree への移動や
+ * /clear ではエージェントが生きたまま会話セッションだけが終わって SessionEnd が飛ぶので、
+ * ここで固着させると動き続けている行が二度と更新されなくなる。本当に死んだ場合は
+ * PTY の終了が行ごと消すので、状態を据え置く必要はない。
  */
 export const applyHookEvent = (session: Session, event: HookEvent): Partial<Session> => {
-  // 終了済みのセッションは、遅れて届いた hook で復活させない。
-  if (session.state === "exited") return {};
-
   switch (event.hook_event_name) {
+    // 会話が作り直された。前の会話のプロンプトと実行内容は残しても誤解を招くだけなので消す。
+    case "SessionStart":
+      return { state: "idle", prompt: "", activity: "" };
     case "UserPromptSubmit":
       return {
         state: "working",

@@ -102,9 +102,19 @@ describe("applyHookEvent", () => {
     expect(patch.state).toBe("exited");
   });
 
-  it("既に exited なら他のイベントで復活しない", () => {
+  // worktree 移動や /clear では、プロセスが生きたまま会話セッションだけが終わって SessionEnd が飛ぶ。
+  // ここで固着させると、動き続けているエージェントの行が二度と更新されなくなる。
+  it("exited でも次のイベントで復帰する", () => {
     const patch = applyHookEvent({ ...base, state: "exited" }, { hook_event_name: "UserPromptSubmit", prompt: "x" });
-    expect(patch).toEqual({});
+    expect(patch).toMatchObject({ state: "working", prompt: "x" });
+  });
+
+  it("SessionStart で idle に戻り前の会話の内容が消える", () => {
+    const patch = applyHookEvent(
+      { ...base, state: "exited", prompt: "npm run rebuild", activity: "Bash ls" },
+      { hook_event_name: "SessionStart" },
+    );
+    expect(patch).toMatchObject({ state: "idle", prompt: "", activity: "" });
   });
 
   it("未知のイベントは何も変えない", () => {
