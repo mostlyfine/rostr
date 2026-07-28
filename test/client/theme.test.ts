@@ -1,49 +1,46 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
-import { THEME_KEY, loadThemeChoice, nextThemeChoice, saveThemeChoice } from "../../src/theme";
+import { THEME_KEY, loadTheme, nextTheme, saveTheme } from "../../src/theme";
 import type { Session } from "../../common/types";
 
 beforeEach(() => {
   localStorage.clear();
 });
 
-describe("loadThemeChoice", () => {
-  it("未設定なら system を返す", () => {
-    expect(loadThemeChoice()).toBe("system");
+describe("loadTheme", () => {
+  it("未設定なら dark を返す", () => {
+    expect(loadTheme()).toBe("dark");
   });
 
   it("保存済みの light / dark をそのまま返す", () => {
     localStorage.setItem(THEME_KEY, "light");
-    expect(loadThemeChoice()).toBe("light");
+    expect(loadTheme()).toBe("light");
     localStorage.setItem(THEME_KEY, "dark");
-    expect(loadThemeChoice()).toBe("dark");
+    expect(loadTheme()).toBe("dark");
   });
 
-  it("未知の値が入っていても system を返す", () => {
+  it("未知の値が入っていても dark を返す", () => {
     localStorage.setItem(THEME_KEY, "solarized");
-    expect(loadThemeChoice()).toBe("system");
+    expect(loadTheme()).toBe("dark");
   });
 });
 
-describe("saveThemeChoice", () => {
+describe("saveTheme", () => {
   it("保存した選択を読み戻せる", () => {
-    saveThemeChoice("dark");
-    expect(loadThemeChoice()).toBe("dark");
+    saveTheme("light");
+    expect(loadTheme()).toBe("light");
   });
 
-  it("system はキー自体を消す", () => {
-    saveThemeChoice("light");
-    saveThemeChoice("system");
-    expect(localStorage.getItem(THEME_KEY)).toBeNull();
-    expect(loadThemeChoice()).toBe("system");
+  it("既定の dark でも値を書き残す", () => {
+    saveTheme("dark");
+    expect(localStorage.getItem(THEME_KEY)).toBe("dark");
   });
 });
 
-describe("nextThemeChoice", () => {
-  it("system → light → dark → system の順で巡回する", () => {
-    expect(nextThemeChoice("system")).toBe("light");
-    expect(nextThemeChoice("light")).toBe("dark");
-    expect(nextThemeChoice("dark")).toBe("system");
+describe("nextTheme", () => {
+  it("dark と light を入れ替える", () => {
+    expect(nextTheme("dark")).toBe("light");
+    expect(nextTheme("light")).toBe("dark");
   });
 });
 
@@ -51,29 +48,6 @@ describe("nextThemeChoice", () => {
  * useTheme はモジュールスコープに状態を持つシングルトンなので、テストごとに
  * vi.resetModules() で作り直し、Sidebar も新しいインスタンスを掴むよう動的 import する。
  */
-type OsTheme = "light" | "dark";
-
-/** matchMedia の change リスナーを捕まえて、OS 側のテーマ変更を後から起こせるようにする。 */
-const stubMatchMedia = (initial: OsTheme) => {
-  const listeners = new Set<(event: { matches: boolean }) => void>();
-  let prefersDark = initial === "dark";
-  vi.stubGlobal("matchMedia", () => ({
-    get matches() {
-      return prefersDark;
-    },
-    addEventListener: (_: string, fn: (event: { matches: boolean }) => void) => {
-      listeners.add(fn);
-    },
-    removeEventListener: (_: string, fn: (event: { matches: boolean }) => void) => {
-      listeners.delete(fn);
-    },
-  }));
-  return (next: OsTheme) => {
-    prefersDark = next === "dark";
-    for (const fn of listeners) fn({ matches: prefersDark });
-  };
-};
-
 const mountSidebar = async () => {
   const Sidebar = (await import("../../src/components/Sidebar.vue")).default;
   return mount(Sidebar, { props: { sessions: [] as Session[], selectedId: null } });
@@ -87,18 +61,15 @@ describe("テーマトグル", () => {
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
     delete document.documentElement.dataset.theme;
   });
 
-  it("既定では OS の設定を反映する", async () => {
-    stubMatchMedia("light");
+  it("既定では dark を適用する", async () => {
     await mountSidebar();
-    expect(currentTheme()).toBe("light");
+    expect(currentTheme()).toBe("dark");
   });
 
-  it("押すたびに light → dark → system と巡回し、選択を保存する", async () => {
-    stubMatchMedia("dark");
+  it("押すたびに dark と light を往復し、選択を保存する", async () => {
     const wrapper = await mountSidebar();
     const toggle = wrapper.find("[data-test=theme-toggle]");
 
@@ -109,37 +80,11 @@ describe("テーマトグル", () => {
     await toggle.trigger("click");
     expect(currentTheme()).toBe("dark");
     expect(localStorage.getItem(THEME_KEY)).toBe("dark");
-
-    await toggle.trigger("click");
-    expect(currentTheme()).toBe("dark"); // system かつ OS がダーク
-    expect(localStorage.getItem(THEME_KEY)).toBeNull();
   });
 
-  it("保存済みの選択があれば OS の設定より優先する", async () => {
+  it("保存済みの選択を反映する", async () => {
     localStorage.setItem(THEME_KEY, "light");
-    stubMatchMedia("dark");
     await mountSidebar();
-    expect(currentTheme()).toBe("light");
-  });
-
-  it("system のときは OS 側の変更にリロード無しで追従する", async () => {
-    const changeOs = stubMatchMedia("dark");
-    await mountSidebar();
-    expect(currentTheme()).toBe("dark");
-
-    changeOs("light");
-    await new Promise((resolve) => setTimeout(resolve));
-    expect(currentTheme()).toBe("light");
-  });
-
-  it("明示的に選んだ後は OS 側の変更を無視する", async () => {
-    const changeOs = stubMatchMedia("dark");
-    const wrapper = await mountSidebar();
-    await wrapper.find("[data-test=theme-toggle]").trigger("click");
-    expect(currentTheme()).toBe("light");
-
-    changeOs("light");
-    await new Promise((resolve) => setTimeout(resolve));
     expect(currentTheme()).toBe("light");
   });
 });

@@ -9,7 +9,7 @@ const props = defineProps<{ sessions: Session[]; selectedId: string | null }>();
 const emit = defineEmits<{ select: [id: string]; close: [id: string]; create: [] }>();
 
 const rows = computed(() => toSidebarRows(props.sessions));
-const { label: themeLabel, cycle: cycleTheme } = useTheme();
+const { label: themeLabel, toggle: toggleTheme } = useTheme();
 </script>
 
 <template>
@@ -21,7 +21,7 @@ const { label: themeLabel, cycle: cycleTheme } = useTheme();
           class="theme"
           data-test="theme-toggle"
           :title="themeLabel.title"
-          @click="cycleTheme()"
+          @click="toggleTheme()"
         >
           {{ themeLabel.icon }}
         </button>

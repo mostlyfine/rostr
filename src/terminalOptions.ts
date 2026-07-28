@@ -1,9 +1,9 @@
 import type { ITerminalOptions } from "@xterm/xterm";
 import { XTERM_THEMES } from "./theme";
-import type { ResolvedTheme } from "./theme";
+import type { Theme } from "./theme";
 
 /** ターミナル生成時に渡すオプション。単体テストできるようコンポーネントから切り出してある。 */
-export const createTerminalOptions = (theme: ResolvedTheme): ITerminalOptions => ({
+export const createTerminalOptions = (theme: Theme): ITerminalOptions => ({
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, "Courier New", monospace',
   fontSize: 13,
   cursorBlink: true,
