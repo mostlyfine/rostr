@@ -71,6 +71,9 @@ const focus = () => {
   });
 };
 
+/** ユーザーがこのターミナルに入力中か。自動フォーカス切り替えでキー入力を奪わないための判定に使う。 */
+const hasFocus = () => host.value?.contains(document.activeElement) ?? false;
+
 watch(
   () => props.visible,
   (visible) => {
@@ -83,7 +86,7 @@ watch(resolvedTheme, (theme) => {
   if (term) term.options.theme = XTERM_THEMES[theme];
 });
 
-defineExpose({ focus });
+defineExpose({ focus, hasFocus });
 
 onBeforeUnmount(() => {
   observer?.disconnect();

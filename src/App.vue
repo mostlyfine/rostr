@@ -5,6 +5,10 @@ import NewSessionDialog from "./components/NewSessionDialog.vue";
 import TerminalView from "./components/TerminalView.vue";
 import { useSessions } from "./composables/useSessions";
 import { rememberRecentDir } from "./recentDirs";
+import type { AgentState, Session } from "../common/types";
+
+/** ユーザーの目を引きたい状態。SessionItem.vue の点滅対象と同じ。 */
+const NOTABLE: AgentState[] = ["waiting", "done"];
 
 const { sessions, create, close } = useSessions();
 
@@ -19,8 +23,11 @@ const openedIds = ref<string[]>([]);
 const selectedSession = computed(() => sessions.value.find((s) => s.id === selectedId.value) ?? null);
 
 /** 各ターミナルへフォーカスを渡すための参照。v-for なので id をキーに自分で持つ。 */
-type TerminalHandle = { focus: () => void };
+type TerminalHandle = { focus: () => void; hasFocus: () => boolean };
 const terminals = new Map<string, TerminalHandle>();
+
+/** 直前に見たセッション状態。waiting/done への「遷移」を検知するための基準値。 */
+const prevStates = new Map<string, AgentState>();
 
 const registerTerminal = (id: string) => (instance: unknown) => {
   if (instance) terminals.set(id, instance as TerminalHandle);
@@ -38,8 +45,26 @@ const select = async (id: string) => {
   terminals.get(id)?.focus();
 };
 
+/**
+ * waiting/done に新しく遷移したセッションを見つけ、いま操作中でなければそこへフォーカスを移す。
+ * 選択中のターミナルに実際に入力中（hasFocus）の場合は奪わず、点滅による通知だけに任せる。
+ */
+const focusNewlyNotable = (list: Session[]) => {
+  const newlyNotable = list.find((session) => {
+    const prev = prevStates.get(session.id);
+    return prev !== undefined && !NOTABLE.includes(prev) && NOTABLE.includes(session.state) && session.id !== selectedId.value;
+  });
+  if (!newlyNotable) return;
+  const selectedIsBusy = !!selectedId.value && (terminals.get(selectedId.value)?.hasFocus() ?? false);
+  if (!selectedIsBusy) select(newlyNotable.id);
+};
+
 // 削除されたセッションのターミナルを片付け、選択を別のセッションへ移す。
 watch(sessions, (list) => {
+  focusNewlyNotable(list);
+  prevStates.clear();
+  for (const session of list) prevStates.set(session.id, session.state);
+
   const alive = new Set(list.map((session) => session.id));
   openedIds.value = openedIds.value.filter((id) => alive.has(id));
   if (selectedId.value && !alive.has(selectedId.value)) {

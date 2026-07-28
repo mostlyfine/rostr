@@ -4,14 +4,15 @@ import { mount } from "@vue/test-utils";
 import type { Session } from "../../common/types";
 
 const focusSpy = vi.fn();
+let hasFocusReturn = false;
 
-// xterm.js は jsdom で動かないので、ターミナルは focus だけ持つスタブに差し替える。
+// xterm.js は jsdom で動かないので、ターミナルは focus/hasFocus だけ持つスタブに差し替える。
 vi.mock("../../src/components/TerminalView.vue", () => ({
   default: defineComponent({
     name: "TerminalView",
     props: { sessionId: { type: String, required: true }, visible: { type: Boolean, required: true } },
     setup(props, { expose }) {
-      expose({ focus: () => focusSpy(props.sessionId) });
+      expose({ focus: () => focusSpy(props.sessionId), hasFocus: () => hasFocusReturn });
       return () => h("div", { class: "terminal-stub" });
     },
   }),
@@ -54,6 +55,7 @@ const mountApp = async (sessions: Session[]) => {
 
 beforeEach(() => {
   focusSpy.mockClear();
+  hasFocusReturn = false;
   FakeEventSource.instances = [];
   vi.stubGlobal("EventSource", FakeEventSource);
   vi.stubGlobal("fetch", vi.fn());
@@ -116,6 +118,72 @@ describe("App のフォーカス制御", () => {
 
     // サーバから a が消えた一覧が届く。
     FakeEventSource.instances.at(-1)!.emit([session({ id: "b" })]);
+    await nextTick();
+    await nextTick();
+
+    expect(focusSpy).toHaveBeenCalledWith("b");
+  });
+});
+
+describe("waiting/done への自動フォーカス", () => {
+  it("選択中でないセッションが waiting になり、選択中ターミナルにフォーカスが無ければ自動で切り替わる", async () => {
+    const wrapper = await mountApp([session({ id: "a", state: "working" }), session({ id: "b", state: "working" })]);
+
+    await wrapper.findAll("[data-test=session-body]")[0].trigger("click");
+    await nextTick();
+    focusSpy.mockClear();
+    hasFocusReturn = false;
+
+    FakeEventSource.instances.at(-1)!.emit([
+      session({ id: "a", state: "working" }),
+      session({ id: "b", state: "waiting" }),
+    ]);
+    await nextTick();
+    await nextTick();
+
+    expect(focusSpy).toHaveBeenCalledWith("b");
+  });
+
+  it("選択中ターミナルにフォーカスがある場合は自動切り替えしない", async () => {
+    const wrapper = await mountApp([session({ id: "a", state: "working" }), session({ id: "b", state: "working" })]);
+
+    await wrapper.findAll("[data-test=session-body]")[0].trigger("click");
+    await nextTick();
+    focusSpy.mockClear();
+    hasFocusReturn = true;
+
+    FakeEventSource.instances.at(-1)!.emit([
+      session({ id: "a", state: "working" }),
+      session({ id: "b", state: "waiting" }),
+    ]);
+    await nextTick();
+    await nextTick();
+
+    expect(focusSpy).not.toHaveBeenCalled();
+  });
+
+  it("選択中のセッション自身が waiting になっても自動切り替えは起きない", async () => {
+    const wrapper = await mountApp([session({ id: "a", state: "working" })]);
+
+    await wrapper.find("[data-test=session-body]").trigger("click");
+    await nextTick();
+    focusSpy.mockClear();
+
+    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", state: "waiting" })]);
+    await nextTick();
+    await nextTick();
+
+    expect(focusSpy).not.toHaveBeenCalled();
+  });
+
+  it("何も選択していない状態で他セッションが done になったら自動選択される", async () => {
+    await mountApp([session({ id: "a", state: "idle" }), session({ id: "b", state: "working" })]);
+    focusSpy.mockClear();
+
+    FakeEventSource.instances.at(-1)!.emit([
+      session({ id: "a", state: "idle" }),
+      session({ id: "b", state: "done" }),
+    ]);
     await nextTick();
     await nextTick();
 
