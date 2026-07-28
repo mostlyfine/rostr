@@ -11,16 +11,23 @@ export const STATE_LABEL: Record<AgentState, string> = {
   exited: "終了",
 };
 
-export interface SessionGroup {
-  state: AgentState;
-  label: string;
-  sessions: Session[];
-}
+/** サイドバーの1行。見出しとセッションを同じ列に混ぜて並べる。 */
+export type SidebarRow =
+  | { kind: "header"; key: string; state: AgentState; label: string; count: number }
+  | { kind: "session"; key: string; session: Session };
 
-/** 状態ごとにまとめ、該当が無いグループは落とす。 */
-export const groupByState = (sessions: Session[]): SessionGroup[] =>
-  STATE_ORDER.map((state) => ({
-    state,
-    label: STATE_LABEL[state],
-    sessions: sessions.filter((session) => session.state === state),
-  })).filter((group) => group.sessions.length > 0);
+/**
+ * 状態ごとにまとめたうえで、見出しとセッションを1列へ平らに並べる。該当が無い状態は落とす。
+ * 状態をまたぐ行の移動をアニメーションさせるには、TransitionGroup の親が1つである必要があるため、
+ * グループごとにリストを分けずにこの形にしている。
+ */
+export const toSidebarRows = (sessions: Session[]): SidebarRow[] =>
+  STATE_ORDER.flatMap((state): SidebarRow[] => {
+    const members = sessions.filter((session) => session.state === state);
+    if (members.length === 0) return [];
+    return [
+      // セッションの id は UUID なので、接頭辞を付けておけば見出しの key と衝突しない。
+      { kind: "header", key: `header:${state}`, state, label: STATE_LABEL[state], count: members.length },
+      ...members.map((session): SidebarRow => ({ kind: "session", key: session.id, session })),
+    ];
+  });
