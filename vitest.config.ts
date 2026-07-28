@@ -8,11 +8,16 @@ export default defineConfig({
     alias: { "@common": fileURLToPath(new URL("./common", import.meta.url)) },
   },
   test: {
-    include: ["test/**/*.test.ts"],
     // クライアントは DOM が要るので jsdom、サーバは node-pty を使うので node。
-    environmentMatchGlobs: [
-      ["test/client/**", "jsdom"],
-      ["test/server/**", "node"],
+    projects: [
+      {
+        extends: true,
+        test: { name: "client", include: ["test/client/**/*.test.ts"], environment: "jsdom" },
+      },
+      {
+        extends: true,
+        test: { name: "server", include: ["test/server/**/*.test.ts"], environment: "node" },
+      },
     ],
   },
 });
