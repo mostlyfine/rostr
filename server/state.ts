@@ -75,6 +75,8 @@ export const applyHookEvent = (session: Session, event: HookEvent): Partial<Sess
       // 直前の PreToolUse で入れた activity をそのまま残す。
       return { state: "working" };
     case "Notification":
+      // idle_prompt は一定時間操作が無いだけの催促で、人の対応が要る通知ではない。
+      if (event.notification_type === "idle_prompt") return {};
       return {
         state: "waiting",
         activity: truncateOneLine(event.message ?? "入力待ち", ACTIVITY_MAX),

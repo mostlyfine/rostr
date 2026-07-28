@@ -37,6 +37,8 @@ export interface HookEvent {
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   message?: string;
+  /** Notification イベントの種別。permission_prompt / idle_prompt など。 */
+  notification_type?: string;
   [key: string]: unknown;
 }
 
