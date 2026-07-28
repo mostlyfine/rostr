@@ -1,6 +1,6 @@
 # rostr
 
-A tool for launching, monitoring, and ending multiple Claude Code sessions from the browser. The left sidebar groups agents by state and shows both the prompt you submitted and what the agent is currently running. Clicking an agent opens an xterm.js terminal on the right.
+A tool for launching, monitoring, and ending multiple Claude Code sessions from the browser. The left sidebar groups agents by state and shows a one-line summary of what the conversation is about, the prompt you submitted, and what the agent is currently running. Clicking an agent opens an xterm.js terminal on the right.
 
 ## Requirements
 
@@ -56,6 +56,8 @@ npm run server   # http://localhost:8787
 | `PORT` | `8787` | Server port |
 | `CLAUDE_BIN` | `claude` | Binary launched for each agent |
 | `ROSTR_TMUX` | (auto-detected) | Set to `0` to skip tmux and spawn directly |
+| `ROSTR_SUMMARY` | `1` | Set to `0` to stop generating sidebar summaries |
+| `ROSTR_SUMMARY_MODEL` | `haiku` | Model used for the sidebar summary |
 
 ## How it works
 
@@ -77,6 +79,16 @@ npm run server   # http://localhost:8787
 
 - List changes are streamed over SSE (`GET /api/events`), and terminal I/O over WebSocket (`/ws?session=<id>`).
 - Closing the browser leaves the PTY running; reconnecting restores the most recent 200KB of scrollback.
+
+### Sidebar summaries
+
+Each time an agent finishes a turn (`Stop`), the conversation JSONL that Claude Code reports through `transcript_path` is read and the last few turns are piped into `claude -p --model haiku`. The model answers with a short phrase describing what the user is trying to accomplish, and that phrase becomes the summary line in the sidebar.
+
+- Only the last 5 user turns (600 chars each) and the most recent assistant turn (160 chars) are sent, so the input stays small no matter how long the conversation grows.
+- One generation runs per agent at a time. A `Stop` that arrives while one is still running is dropped rather than queued, and a generation that takes longer than 30 seconds is killed.
+- `SessionStart` (which `/clear` and moving to a worktree both fire) clears the summary and invalidates any generation still in flight, so a summary from the previous conversation never reappears.
+- Failures are silent. The previous summary stays on screen and the next `Stop` tries again.
+- Set `ROSTR_SUMMARY=0` to turn this off entirely; nothing else in the sidebar changes.
 
 ### Scrolling back through past output
 

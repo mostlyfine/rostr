@@ -50,6 +50,7 @@ const session = (over: Partial<Session>): Session => ({
   state: "idle",
   prompt: "",
   activity: "",
+  summary: "",
   createdAt: 0,
   updatedAt: 0,
   ...over,

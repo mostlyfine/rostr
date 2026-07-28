@@ -1,22 +1,41 @@
 import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionManager } from "../../server/sessions";
+import type { Summarizer } from "../../server/summary";
 import { isTmuxAvailable, tmuxSessionName } from "../../server/tmux";
 
 /** claude の代わりに sh を起動する。テストでは実際のエージェントは要らない。 */
 const managers: SessionManager[] = [];
 
-const newManager = (opts: { buildArgs?: (id: string) => string[]; scrollbackChars?: number } = {}) => {
+const newManager = (
+  opts: {
+    buildArgs?: (id: string) => string[];
+    scrollbackChars?: number;
+    summarizer?: Summarizer;
+  } = {},
+) => {
   const manager = new SessionManager({
     agentBin: "/bin/sh",
     buildArgs: opts.buildArgs ?? (() => []),
     port: 0,
     scrollbackChars: opts.scrollbackChars ?? 64,
+    summarizer: opts.summarizer,
     // この describe は tmux を挟まない直接起動の経路を見る。
     tmux: false,
   });
   managers.push(manager);
   return manager;
+};
+
+/** 依頼を記録するだけの summarizer。apply を手で呼んで結果の反映を確かめる。 */
+const fakeSummarizer = () => {
+  const requests: { id: string; path: string; apply: (summary: string) => void }[] = [];
+  const resets: string[] = [];
+  const summarizer: Summarizer = {
+    request: (id, path, apply) => requests.push({ id, path, apply }),
+    reset: (id) => resets.push(id),
+  };
+  return { requests, resets, summarizer };
 };
 
 const waitFor = async (predicate: () => boolean, timeoutMs = 5000) => {
@@ -290,5 +309,88 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
     manager.recover();
 
     expect(manager.list().map((s) => s.id)).toEqual([session.id]);
+  });
+});
+
+describe("SessionManager の要約", () => {
+  it("Stop で、覚えておいた transcript_path を使って要約を依頼する", () => {
+    const fake = fakeSummarizer();
+    const manager = newManager({ summarizer: fake.summarizer });
+    const session = manager.create("/tmp");
+
+    manager.applyHook(session.id, {
+      hook_event_name: "UserPromptSubmit",
+      prompt: "直したい",
+      transcript_path: "/tmp/conv.jsonl",
+    });
+    manager.applyHook(session.id, { hook_event_name: "Stop" });
+
+    expect(fake.requests.map((r) => [r.id, r.path])).toEqual([[session.id, "/tmp/conv.jsonl"]]);
+  });
+
+  it("transcript_path を一度も受け取っていなければ依頼しない", () => {
+    const fake = fakeSummarizer();
+    const manager = newManager({ summarizer: fake.summarizer });
+    const session = manager.create("/tmp");
+
+    manager.applyHook(session.id, { hook_event_name: "Stop" });
+    expect(fake.requests).toEqual([]);
+  });
+
+  it("apply が呼ばれるとセッションに要約が入り、変更が通知される", () => {
+    const fake = fakeSummarizer();
+    const manager = newManager({ summarizer: fake.summarizer });
+    const session = manager.create("/tmp");
+    const changes = vi.fn();
+
+    manager.applyHook(session.id, {
+      hook_event_name: "Stop",
+      transcript_path: "/tmp/conv.jsonl",
+    });
+    manager.onChange(changes);
+    fake.requests[0].apply("サイドバー要約の表示");
+
+    expect(manager.get(session.id)?.summary).toBe("サイドバー要約の表示");
+    expect(changes).toHaveBeenCalledTimes(1);
+  });
+
+  it("消えたセッションへの apply は無視する", () => {
+    const fake = fakeSummarizer();
+    const manager = newManager({ summarizer: fake.summarizer });
+    const session = manager.create("/tmp");
+
+    manager.applyHook(session.id, {
+      hook_event_name: "Stop",
+      transcript_path: "/tmp/conv.jsonl",
+    });
+    manager.disposeAll();
+    expect(() => fake.requests[0].apply("要約")).not.toThrow();
+  });
+
+  it("SessionStart で summarizer に reset を伝え、要約を消す", () => {
+    const fake = fakeSummarizer();
+    const manager = newManager({ summarizer: fake.summarizer });
+    const session = manager.create("/tmp");
+
+    manager.applyHook(session.id, {
+      hook_event_name: "Stop",
+      transcript_path: "/tmp/conv.jsonl",
+    });
+    fake.requests[0].apply("前の会話の要約");
+    manager.applyHook(session.id, { hook_event_name: "SessionStart" });
+
+    expect(fake.resets).toEqual([session.id]);
+    expect(manager.get(session.id)?.summary).toBe("");
+  });
+
+  it("summarizer を渡さなくても hook の処理は落ちない", () => {
+    const manager = newManager();
+    const session = manager.create("/tmp");
+    expect(
+      manager.applyHook(session.id, {
+        hook_event_name: "Stop",
+        transcript_path: "/tmp/conv.jsonl",
+      }),
+    ).toBe(true);
   });
 });

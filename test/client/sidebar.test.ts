@@ -12,6 +12,7 @@ const session = (over: Partial<Session>): Session => ({
   state: "idle",
   prompt: "",
   activity: "",
+  summary: "",
   createdAt: 0,
   updatedAt: 0,
   ...over,
@@ -213,5 +214,26 @@ describe("SessionItem のブリンク", () => {
 
   it("状態に応じた色分けのため状態クラスを付ける", () => {
     expect(mountWith("waiting").classes()).toContain("waiting");
+  });
+});
+
+describe("SessionItem の要約", () => {
+  const mountItem = (over: Partial<Session>) =>
+    mount(SessionItem, { props: { session: session(over), selected: false } });
+
+  it("要約があれば表示する", () => {
+    const wrapper = mountItem({ summary: "サイドバー要約の表示" });
+    expect(wrapper.get('[data-test="session-summary"]').text()).toBe("サイドバー要約の表示");
+  });
+
+  it("要約が無ければ行ごと出さない", () => {
+    const wrapper = mountItem({ summary: "" });
+    expect(wrapper.find('[data-test="session-summary"]').exists()).toBe(false);
+  });
+
+  it("要約があってもプロンプトと実行内容は残す", () => {
+    const wrapper = mountItem({ summary: "要約", prompt: "直したい", activity: "Bash npm test" });
+    expect(wrapper.text()).toContain("直したい");
+    expect(wrapper.text()).toContain("Bash npm test");
   });
 });

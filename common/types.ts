@@ -12,6 +12,8 @@ export interface Session {
   prompt: string;
   /** いま何をしているか。例: "Edit App.vue" */
   activity: string;
+  /** 会話全体で何をしようとしているかの1行要約。未生成なら空文字。 */
+  summary: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -39,6 +41,8 @@ export interface HookEvent {
   message?: string;
   /** Notification イベントの種別。permission_prompt / idle_prompt など。 */
   notification_type?: string;
+  /** この会話の JSONL ファイルの絶対パス。要約の入力に使う。 */
+  transcript_path?: string;
   [key: string]: unknown;
 }
 

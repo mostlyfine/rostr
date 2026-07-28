@@ -5,6 +5,7 @@ import pty from "node-pty";
 import type { IPty } from "node-pty";
 import type { HookEvent, Session } from "../common/types";
 import { applyHookEvent } from "./state";
+import type { Summarizer } from "./summary";
 import {
   DEFAULT_TMUX_SOCKET,
   buildAgentCommand,
@@ -31,6 +32,8 @@ export interface SessionManagerOptions {
   tmux?: boolean;
   /** tmux のソケット名。テストでは本番と分けるために差し替える。 */
   tmuxSocket?: string;
+  /** 要約の生成先。渡さなければ要約は作られない。 */
+  summarizer?: Summarizer;
 }
 
 type OutputListener = (data: string) => void;
@@ -44,6 +47,8 @@ interface Entry {
   listeners: Set<OutputListener>;
   /** tmux 経由のときだけ入る。 */
   tmuxName?: string;
+  /** hook が知らせてきた会話 JSONL のパス。要約の入力に使う。 */
+  transcriptPath?: string;
   killTimer?: NodeJS.Timeout;
 }
 
@@ -88,6 +93,7 @@ const makeIdleSession = (id: string, cwd: string, createdAt: number): Session =>
   state: "idle",
   prompt: "",
   activity: "",
+  summary: "",
   createdAt,
   updatedAt: createdAt,
 });
@@ -220,12 +226,47 @@ export class SessionManager {
     const entry = this.entries.get(id);
     if (!entry) return false;
 
-    const patch = applyHookEvent(entry.session, event);
-    if (Object.keys(patch).length === 0) return true;
+    // 会話ファイルの場所は毎回同じとは限らない（worktree 移動などで変わる）ので都度上書きする。
+    if (typeof event.transcript_path === "string" && event.transcript_path !== "") {
+      entry.transcriptPath = event.transcript_path;
+    }
 
-    entry.session = { ...entry.session, ...patch, updatedAt: Date.now() };
-    this.emitChange();
+    const patch = applyHookEvent(entry.session, event);
+    if (Object.keys(patch).length > 0) {
+      entry.session = { ...entry.session, ...patch, updatedAt: Date.now() };
+      this.emitChange();
+    }
+
+    this.updateSummary(id, entry, event, patch);
     return true;
+  }
+
+  /**
+   * 要約の生成をきっかけごとに振り分ける。
+   * 会話が作り直された（= applyHookEvent が summary をリセットした）ら世代を進めて古い結果を
+   * 捨てさせ、ターンが終わったら生成を依頼する。「作り直された」の判定を hook_event_name で
+   * 二重に行わず、applyHookEvent が実際に出したパッチをそのまま使う。
+   */
+  private updateSummary(id: string, entry: Entry, event: HookEvent, patch: Partial<Session>): void {
+    const summarizer = this.options.summarizer;
+    if (!summarizer) return;
+
+    if (patch.summary === "") {
+      summarizer.reset(id);
+      return;
+    }
+    if (event.hook_event_name !== "Stop") return;
+    if (!entry.transcriptPath) return;
+
+    summarizer.request(id, entry.transcriptPath, (summary) => this.setSummary(id, summary));
+  }
+
+  /** 要約が届いたら書き戻す。生成中にセッションが消えていることがあるので存在を確かめる。 */
+  private setSummary(id: string, summary: string): void {
+    const entry = this.entries.get(id);
+    if (!entry || entry.session.summary === summary) return;
+    entry.session = { ...entry.session, summary, updatedAt: Date.now() };
+    this.emitChange();
   }
 
   /** SIGTERM を送り、猶予を過ぎても残っていれば SIGKILL する。 */

@@ -33,6 +33,14 @@ const select = () => {
         <span class="dot" :class="props.session.state" />
         <span class="title">{{ props.session.title }}</span>
       </div>
+      <p
+        v-if="props.session.summary"
+        class="summary"
+        data-test="session-summary"
+        :title="props.session.summary"
+      >
+        {{ props.session.summary }}
+      </p>
       <p class="prompt" :class="{ empty: !props.session.prompt }">
         {{ props.session.prompt || "No prompt entered" }}
       </p>
@@ -73,13 +81,23 @@ const select = () => {
   align-items: center;
   gap: 6px;
 }
+.title,
+.summary,
+.activity {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .title {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-strong);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+/* 一覧で最初に目に入ってほしいのはここなので、プロンプトより濃く出す。 */
+.summary {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--text-strong);
 }
 .dot {
   width: 8px;
@@ -150,9 +168,6 @@ const select = () => {
   margin: 3px 0 0;
   font-size: 11px;
   color: var(--text-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .close {
   flex: none;
