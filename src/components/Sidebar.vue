@@ -13,7 +13,7 @@ const rows = computed(() => toSidebarRows(props.sessions));
 <template>
   <aside class="sidebar">
     <header class="header">
-      <h1>multi-agent</h1>
+      <h1>rostr</h1>
       <button class="new" data-test="new-session" @click="emit('create')">+ 新規</button>
     </header>
 

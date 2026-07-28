@@ -37,7 +37,7 @@ export const buildHookSettings = (notifyScriptPath: string): HookSettings => {
 
 /** 設定を一時ファイルへ書き出し、そのパスを返す。 */
 export const writeHookSettings = (sessionId: string, notifyScriptPath: string): string => {
-  const dir = join(tmpdir(), "multi-agent-settings");
+  const dir = join(tmpdir(), "rostr-settings");
   mkdirSync(dir, { recursive: true });
   const path = join(dir, `${sessionId}.json`);
   writeFileSync(path, JSON.stringify(buildHookSettings(notifyScriptPath), null, 2), "utf8");

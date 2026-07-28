@@ -1,7 +1,7 @@
-// Claude Code の hook から起動され、stdin に来た JSON をそのまま multi-agent サーバへ転送する。
+// Claude Code の hook から起動され、stdin に来た JSON をそのまま rostr サーバへ転送する。
 // hook が非ゼロで終了すると Claude 本体の動作を妨げるため、何が起きても exit 0 で終わる。
-const sessionId = process.env.MA_SESSION_ID;
-const port = process.env.MA_PORT;
+const sessionId = process.env.ROSTR_SESSION_ID;
+const port = process.env.ROSTR_PORT;
 
 const readStdin = async () => {
   const chunks = [];

@@ -48,7 +48,7 @@ interface Entry {
 }
 
 /**
- * multi-agent 自身が Claude Code のセッション内から起動された場合、親の環境変数が子へ漏れる。
+ * rostr 自身が Claude Code のセッション内から起動された場合、親の環境変数が子へ漏れる。
  * 子は独立したセッションなので、親を指す印は取り除いてから起動する。
  */
 export const INHERITED_CLAUDE_ENV_KEYS = [
@@ -61,7 +61,7 @@ export const INHERITED_CLAUDE_ENV_KEYS = [
   "CLAUDE_PID",
 ];
 
-/** tmux の中から multi-agent を起動していると、attach がネストを嫌って失敗する。 */
+/** tmux の中から rostr を起動していると、attach がネストを嫌って失敗する。 */
 const NESTED_TMUX_ENV_KEYS = ["TMUX", "TMUX_PANE"];
 
 const DEFAULT_SCROLLBACK_CHARS = 200_000;
@@ -311,8 +311,8 @@ export class SessionManager {
     for (const key of INHERITED_CLAUDE_ENV_KEYS) delete env[key];
     for (const key of NESTED_TMUX_ENV_KEYS) delete env[key];
     if (sessionId) {
-      env.MA_SESSION_ID = sessionId;
-      env.MA_PORT = String(this.options.port);
+      env.ROSTR_SESSION_ID = sessionId;
+      env.ROSTR_PORT = String(this.options.port);
     }
     return env;
   }

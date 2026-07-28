@@ -97,6 +97,6 @@ if (recovered > 0) console.log(`tmux から ${recovered} 件のセッション�
 server.listen(port, () => {
   const tmuxState = manager.tmuxEnabled ? "on" : "off";
   console.log(
-    `multi-agent server listening on http://127.0.0.1:${port} (agent: ${agentBin}, tmux: ${tmuxState})`,
+    `rostr server listening on http://127.0.0.1:${port} (agent: ${agentBin}, tmux: ${tmuxState})`,
   );
 });
