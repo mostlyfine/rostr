@@ -89,7 +89,7 @@ const makeIdleSession = (id: string, cwd: string, createdAt: number): Session =>
   prompt: "",
   activity: "",
   createdAt,
-  updatedAt: Date.now(),
+  updatedAt: createdAt,
 });
 
 export class SessionManager {
