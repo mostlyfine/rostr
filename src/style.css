@@ -1,12 +1,49 @@
+/*
+ * 色はすべてここのトークン経由で参照する。各コンポーネントの <style scoped> は
+ * セレクタこそスコープ化されるが、CSS 変数は普通に継承されるので var() で届く。
+ */
 :root {
   color-scheme: dark;
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+
+  --bg-app: #0d1117;
+  --bg-sidebar: #161a22;
+  --bg-surface: #1b202a;
+  --bg-input: #11151c;
+  --bg-control: #232a36;
+  --bg-control-hover: #2d3644;
+  --bg-hover: #1f2430;
+  --bg-selected: #2a3140;
+  --bg-badge: #262c38;
+  --bg-danger-hover: #3b3040;
+  --bg-backdrop: rgba(0, 0, 0, 0.55);
+
+  --text: #d8dee9;
+  --text-strong: #e6e9ef;
+  --text-secondary: #b9c0cd;
+  --text-tertiary: #8b93a3;
+  --text-muted: #6b7280;
+  --text-link: #8fb3e0;
+  --text-danger: #f87171;
+  --text-on-accent: #ffffff;
+
+  --border: #262c38;
+  --border-strong: #2f3746;
+  --border-control: #3b4252;
+
+  --accent: #2563eb;
+  --focus-ring: #3b82f6;
+
+  --state-waiting: #f59e0b;
+  --state-working: #3b82f6;
+  --state-done: #22c55e;
+  --state-exited: #4b5563;
 }
 
 body {
   margin: 0;
-  background: #0d1117;
-  color: #d8dee9;
+  background: var(--bg-app);
+  color: var(--text);
 }
 
 button {

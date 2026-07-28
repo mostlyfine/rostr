@@ -62,10 +62,10 @@ onUnmounted(() => clearTimeout(timer));
   cursor: pointer;
 }
 .item:hover {
-  background: #1f2430;
+  background: var(--bg-hover);
 }
 .item.selected {
-  background: #2a3140;
+  background: var(--bg-selected);
 }
 .body {
   flex: 1;
@@ -79,7 +79,7 @@ onUnmounted(() => clearTimeout(timer));
 .title {
   font-size: 13px;
   font-weight: 600;
-  color: #e6e9ef;
+  color: var(--text-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -89,19 +89,19 @@ onUnmounted(() => clearTimeout(timer));
   height: 8px;
   border-radius: 50%;
   flex: none;
-  background: #6b7280;
+  background: var(--text-muted);
 }
 .dot.waiting {
-  background: #f59e0b;
+  background: var(--state-waiting);
 }
 .dot.working {
-  background: #3b82f6;
+  background: var(--state-working);
 }
 .dot.done {
-  background: #22c55e;
+  background: var(--state-done);
 }
 .dot.exited {
-  background: #4b5563;
+  background: var(--state-exited);
 }
 
 /*
@@ -121,12 +121,12 @@ onUnmounted(() => clearTimeout(timer));
 /* 背景ではなく内側の枠を光らせる。選択中の背景色と喧嘩しない。 */
 @keyframes blink-waiting {
   50% {
-    box-shadow: inset 0 0 0 1px #f59e0b;
+    box-shadow: inset 0 0 0 1px var(--state-waiting);
   }
 }
 @keyframes blink-done {
   50% {
-    box-shadow: inset 0 0 0 1px #22c55e;
+    box-shadow: inset 0 0 0 1px var(--state-done);
   }
 }
 @keyframes blink-dot {
@@ -137,7 +137,7 @@ onUnmounted(() => clearTimeout(timer));
 .prompt {
   margin: 3px 0 0;
   font-size: 12px;
-  color: #b9c0cd;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -146,13 +146,13 @@ onUnmounted(() => clearTimeout(timer));
   -webkit-box-orient: vertical;
 }
 .prompt.empty {
-  color: #6b7280;
+  color: var(--text-muted);
   font-style: italic;
 }
 .activity {
   margin: 3px 0 0;
   font-size: 11px;
-  color: #8b93a3;
+  color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -161,7 +161,7 @@ onUnmounted(() => clearTimeout(timer));
   flex: none;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 16px;
   line-height: 1;
   padding: 2px 5px;
@@ -169,7 +169,7 @@ onUnmounted(() => clearTimeout(timer));
   cursor: pointer;
 }
 .close:hover {
-  background: #3b3040;
-  color: #f87171;
+  background: var(--bg-danger-hover);
+  color: var(--text-danger);
 }
 </style>

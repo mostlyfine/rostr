@@ -93,6 +93,6 @@ onBeforeUnmount(() => {
   height: 100%;
   padding: 6px;
   box-sizing: border-box;
-  background: #0d1117;
+  background: var(--bg-app);
 }
 </style>
