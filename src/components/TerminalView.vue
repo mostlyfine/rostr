@@ -5,8 +5,12 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import type { ClientMessage } from "../../common/types";
+import { XTERM_THEMES } from "../theme";
+import { useTheme } from "../composables/useTheme";
 
 const props = defineProps<{ sessionId: string; visible: boolean }>();
+
+const { resolved: resolvedTheme } = useTheme();
 
 const host = ref<HTMLDivElement | null>(null);
 let term: Terminal | null = null;
@@ -39,7 +43,7 @@ onMounted(() => {
     // tmux 経由では代替画面なので効かない（履歴は tmux 側にある）。
     // tmux が無い環境ではこれが唯一のスクロールバックになる。
     scrollback: 10_000,
-    theme: { background: "#0d1117", foreground: "#d8dee9" },
+    theme: XTERM_THEMES[resolvedTheme.value],
   });
   fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
@@ -73,6 +77,11 @@ watch(
     if (visible) focus();
   },
 );
+
+// xterm は Canvas 描画で CSS 変数を追えないので、切り替えのたびに theme を差し替える。
+watch(resolvedTheme, (theme) => {
+  if (term) term.options.theme = XTERM_THEMES[theme];
+});
 
 defineExpose({ focus });
 

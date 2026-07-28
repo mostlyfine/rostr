@@ -1,10 +1,11 @@
 /*
  * 色はすべてここのトークン経由で参照する。各コンポーネントの <style scoped> は
  * セレクタこそスコープ化されるが、CSS 変数は普通に継承されるので var() で届く。
+ * data-theme は index.html のインラインスクリプトと useTheme が <html> に付ける。
  */
-:root {
+:root,
+:root[data-theme="dark"] {
   color-scheme: dark;
-  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
 
   --bg-app: #0d1117;
   --bg-sidebar: #161a22;
@@ -38,6 +39,47 @@
   --state-working: #3b82f6;
   --state-done: #22c55e;
   --state-exited: #4b5563;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-app: #ffffff;
+  --bg-sidebar: #f6f8fa;
+  --bg-surface: #ffffff;
+  --bg-input: #ffffff;
+  --bg-control: #f6f8fa;
+  --bg-control-hover: #eaeef2;
+  --bg-hover: #eef1f5;
+  --bg-selected: #dfe6f0;
+  --bg-badge: #e4e8ee;
+  --bg-danger-hover: #ffe9e9;
+  --bg-backdrop: rgba(0, 0, 0, 0.35);
+
+  --text: #1f2328;
+  --text-strong: #0d1117;
+  --text-secondary: #424a53;
+  --text-tertiary: #57606a;
+  --text-muted: #6e7781;
+  --text-link: #0a58ca;
+  --text-danger: #cf222e;
+  --text-on-accent: #ffffff;
+
+  --border: #d8dee4;
+  --border-strong: #c9d1d9;
+  --border-control: #c9d1d9;
+
+  --accent: #2563eb;
+  --focus-ring: #2563eb;
+
+  --state-waiting: #9a6700;
+  --state-working: #2563eb;
+  --state-done: #1a7f37;
+  --state-exited: #7d8590;
+}
+
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
 }
 
 body {

@@ -2,19 +2,31 @@
 import { computed } from "vue";
 import type { Session } from "../../common/types";
 import { toSidebarRows } from "../sessionGroups";
+import { useTheme } from "../composables/useTheme";
 import SessionItem from "./SessionItem.vue";
 
 const props = defineProps<{ sessions: Session[]; selectedId: string | null }>();
 const emit = defineEmits<{ select: [id: string]; close: [id: string]; create: [] }>();
 
 const rows = computed(() => toSidebarRows(props.sessions));
+const { label: themeLabel, cycle: cycleTheme } = useTheme();
 </script>
 
 <template>
   <aside class="sidebar">
     <header class="header">
       <h1>rostr</h1>
-      <button class="new" data-test="new-session" @click="emit('create')">+ 新規</button>
+      <div class="actions">
+        <button
+          class="theme"
+          data-test="theme-toggle"
+          :title="themeLabel.title"
+          @click="cycleTheme()"
+        >
+          {{ themeLabel.icon }}
+        </button>
+        <button class="new" data-test="new-session" @click="emit('create')">+ 新規</button>
+      </div>
     </header>
 
     <div class="list">
@@ -62,7 +74,13 @@ h1 {
   font-size: 14px;
   color: var(--text-strong);
 }
-.new {
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.new,
+.theme {
   border: 1px solid var(--border-control);
   background: var(--bg-control);
   color: var(--text);
@@ -71,8 +89,14 @@ h1 {
   border-radius: 5px;
   cursor: pointer;
 }
-.new:hover {
+.new:hover,
+.theme:hover {
   background: var(--bg-control-hover);
+}
+/* 絵文字1文字なので、+ 新規 と高さを揃えつつ左右を詰める。 */
+.theme {
+  padding: 4px 7px;
+  line-height: 1.35;
 }
 .list {
   flex: 1;

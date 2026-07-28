@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>rostr</title>
+    <!--
+      Vue のマウントを待つと、light を選んでいる人に一瞬ダークが見えてしまう。
+      描画前にここで data-theme を確定させる。判定は src/composables/useTheme.ts と同じ。
+    -->
+    <script>
+      (function () {
+        try {
+          var choice = localStorage.getItem("rostr:theme");
+          if (choice !== "light" && choice !== "dark") {
+            choice = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          document.documentElement.dataset.theme = choice;
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>
