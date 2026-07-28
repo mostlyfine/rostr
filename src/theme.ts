@@ -43,5 +43,5 @@ export const XTERM_THEMES: Record<
   { background: string; foreground: string; cursor: string }
 > = {
   dark: { background: "#0d1117", foreground: "#d8dee9", cursor: "#d8dee9" },
-  light: { background: "#ffffff", foreground: "#1f2328", cursor: "#1f2328" },
+  light: { background: "#f7f9fb", foreground: "#1f2328", cursor: "#1f2328" },
 };

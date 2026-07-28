@@ -44,7 +44,7 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg-app: #ffffff;
+  --bg-app: #f7f9fb;
   --bg-sidebar: #f6f8fa;
   --bg-surface: #ffffff;
   --bg-input: #ffffff;
