@@ -1,4 +1,4 @@
-export const RECENT_DIRS_KEY = "multi-agent:recent-dirs";
+export const RECENT_DIRS_KEY = "rostr:recent-dirs";
 const MAX_RECENT = 10;
 
 /** 最近起動したディレクトリを新しい順で返す。 */

@@ -124,13 +124,13 @@ describe("SessionManager", () => {
     expect(manager.applyHook("nope", { hook_event_name: "Stop" })).toBe(false);
   });
 
-  it("子プロセスには MA_SESSION_ID が渡り、親セッションの印は落とされる", async () => {
+  it("子プロセスには ROSTR_SESSION_ID が渡り、親セッションの印は落とされる", async () => {
     process.env.CLAUDECODE = "1";
     process.env.CLAUDE_CODE_SESSION_ID = "parent-session";
     try {
       const manager = newManager({ scrollbackChars: 4096 });
       const session = manager.create("/tmp");
-      manager.write(session.id, 'echo "SID=${MA_SESSION_ID} PARENT=[${CLAUDE_CODE_SESSION_ID}] CC=[${CLAUDECODE}]"\n');
+      manager.write(session.id, 'echo "SID=${ROSTR_SESSION_ID} PARENT=[${CLAUDE_CODE_SESSION_ID}] CC=[${CLAUDECODE}]"\n');
       await waitFor(() => manager.scrollback(session.id).includes("PARENT="));
       const output = manager.scrollback(session.id);
       expect(output).toContain(`SID=${session.id}`);
@@ -172,7 +172,7 @@ describe("SessionManager", () => {
 });
 
 /** 本番と混ざらないよう、テストは専用ソケットの tmux サーバを使う。 */
-const TEST_SOCKET = "multi-agent-test";
+const TEST_SOCKET = "rostr-test";
 
 const tmuxSessionNames = (): string[] => {
   const result = spawnSync("tmux", ["-L", TEST_SOCKET, "list-sessions", "-F", "#{session_name}"], {
@@ -207,10 +207,10 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
     expect(tmuxSessionNames()).toContain(tmuxSessionName(session.id));
   });
 
-  it("tmux 越しでも入出力が通り、MA_SESSION_ID が渡る", async () => {
+  it("tmux 越しでも入出力が通り、ROSTR_SESSION_ID が渡る", async () => {
     const manager = newTmuxManager();
     const session = manager.create(process.cwd());
-    manager.write(session.id, 'echo "SID=${MA_SESSION_ID}"\n');
+    manager.write(session.id, 'echo "SID=${ROSTR_SESSION_ID}"\n');
     await waitFor(() => manager.scrollback(session.id).includes(`SID=${session.id}`));
     expect(manager.scrollback(session.id)).toContain(`SID=${session.id}`);
   });

@@ -48,7 +48,7 @@ interface Entry {
 }
 
 /**
- * multi-agent 自身が Claude Code のセッション内から起動された場合、親の環境変数が子へ漏れる。
+ * rostr 自身が Claude Code のセッション内から起動された場合、親の環境変数が子へ漏れる。
  * 子は独立したセッションなので、親を指す印は取り除いてから起動する。
  */
 export const INHERITED_CLAUDE_ENV_KEYS = [
@@ -63,7 +63,7 @@ export const INHERITED_CLAUDE_ENV_KEYS = [
 
 /**
  * node --watch が子へ付ける印。これが付いた node の子は IPC で依存ファイルを親へ報告する。
- * multi-agent を npm run dev（--watch）で動かしていると、エージェントの中で走る別の node
+ * rostr を npm run dev（--watch）で動かしていると、エージェントの中で走る別の node
  * ——vitest の forks プールなど、IPC で自前のプロトコルを喋るもの——にまで報告が混ざって壊れる。
  */
 const WATCH_MODE_ENV_KEYS = ["WATCH_REPORT_DEPENDENCIES"];
@@ -71,7 +71,7 @@ const WATCH_MODE_ENV_KEYS = ["WATCH_REPORT_DEPENDENCIES"];
 /** エージェントへ渡す前に落とす環境変数。tmux 経由でも直接起動でも同じものを落とす。 */
 export const STRIPPED_ENV_KEYS = [...INHERITED_CLAUDE_ENV_KEYS, ...WATCH_MODE_ENV_KEYS];
 
-/** tmux の中から multi-agent を起動していると、attach がネストを嫌って失敗する。 */
+/** tmux の中から rostr を起動していると、attach がネストを嫌って失敗する。 */
 const NESTED_TMUX_ENV_KEYS = ["TMUX", "TMUX_PANE"];
 
 const DEFAULT_SCROLLBACK_CHARS = 200_000;
@@ -321,8 +321,8 @@ export class SessionManager {
     for (const key of STRIPPED_ENV_KEYS) delete env[key];
     for (const key of NESTED_TMUX_ENV_KEYS) delete env[key];
     if (sessionId) {
-      env.MA_SESSION_ID = sessionId;
-      env.MA_PORT = String(this.options.port);
+      env.ROSTR_SESSION_ID = sessionId;
+      env.ROSTR_PORT = String(this.options.port);
     }
     return env;
   }

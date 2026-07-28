@@ -26,9 +26,9 @@ describe("tmuxSessionName / sessionIdFromName", () => {
     expect(tmuxSessionName("0f0b8a3c-1111-2222-3333-444455556666")).not.toMatch(/[.:]/);
   });
 
-  it("multi-agent 以外のセッション名からは id を取り出さない", () => {
+  it("rostr 以外のセッション名からは id を取り出さない", () => {
     expect(sessionIdFromName("my-work")).toBeUndefined();
-    expect(sessionIdFromName("ma-")).toBeUndefined();
+    expect(sessionIdFromName("rostr-")).toBeUndefined();
     expect(sessionIdFromName("")).toBeUndefined();
   });
 });
@@ -53,8 +53,8 @@ describe("buildAgentCommand", () => {
   });
 
   it("hook 用の変数を渡す", () => {
-    expect(command).toContain("MA_SESSION_ID=abc");
-    expect(command).toContain("MA_PORT=8787");
+    expect(command).toContain("ROSTR_SESSION_ID=abc");
+    expect(command).toContain("ROSTR_PORT=8787");
   });
 
   it("エージェントと引数が末尾に並ぶ", () => {
@@ -64,9 +64,9 @@ describe("buildAgentCommand", () => {
 
 describe("buildNewSessionArgs", () => {
   const args = buildNewSessionArgs({
-    socket: "multi-agent",
-    conf: "/tmp/ma.conf",
-    name: "ma-abc",
+    socket: "rostr",
+    conf: "/tmp/rostr.conf",
+    name: "rostr-abc",
     cwd: "/work",
     cols: 120,
     rows: 30,
@@ -74,13 +74,13 @@ describe("buildNewSessionArgs", () => {
   });
 
   it("専用ソケットと専用 conf を使う", () => {
-    expect(args.slice(0, 4)).toEqual(["-L", "multi-agent", "-f", "/tmp/ma.conf"]);
+    expect(args.slice(0, 4)).toEqual(["-L", "rostr", "-f", "/tmp/rostr.conf"]);
   });
 
   it("デタッチしたまま指定の名前と cwd で起動する", () => {
     expect(args).toContain("new-session");
     expect(args).toContain("-d");
-    expect(args.join(" ")).toContain("-s ma-abc");
+    expect(args.join(" ")).toContain("-s rostr-abc");
     expect(args.join(" ")).toContain("-c /work");
   });
 
@@ -98,20 +98,20 @@ describe("buildNewSessionArgs", () => {
 
 describe("buildAttachArgs / buildKillArgs / buildListArgs", () => {
   it("attach は他クライアントを切り離して名前を完全一致で指す", () => {
-    const args = buildAttachArgs("multi-agent", "/tmp/ma.conf", "ma-abc");
+    const args = buildAttachArgs("rostr", "/tmp/rostr.conf", "rostr-abc");
     expect(args).toContain("attach-session");
     expect(args).toContain("-d");
-    expect(args.join(" ")).toContain("-t =ma-abc");
+    expect(args.join(" ")).toContain("-t =rostr-abc");
   });
 
   it("kill も名前を完全一致で指す", () => {
-    const args = buildKillArgs("multi-agent", "ma-abc");
+    const args = buildKillArgs("rostr", "rostr-abc");
     expect(args).toContain("kill-session");
-    expect(args.join(" ")).toContain("-t =ma-abc");
+    expect(args.join(" ")).toContain("-t =rostr-abc");
   });
 
   it("list は cwd と作成時刻を取れる書式を使う", () => {
-    const args = buildListArgs("multi-agent");
+    const args = buildListArgs("rostr");
     expect(args).toContain("list-sessions");
     const format = args[args.indexOf("-F") + 1];
     expect(format).toContain("#{session_name}");
@@ -121,24 +121,24 @@ describe("buildAttachArgs / buildKillArgs / buildListArgs", () => {
 });
 
 describe("parseListSessions", () => {
-  it("multi-agent のセッションを取り出す", () => {
-    const parsed = parseListSessions("ma-abc\t/work\t1700000000\n");
+  it("rostr のセッションを取り出す", () => {
+    const parsed = parseListSessions("rostr-abc\t/work\t1700000000\n");
     expect(parsed).toEqual([{ id: "abc", cwd: "/work", createdAt: 1_700_000_000_000 }]);
   });
 
-  it("multi-agent 以外のセッションは無視する", () => {
-    const parsed = parseListSessions("ma-abc\t/work\t1700000000\nmy-work\t/other\t1700000001\n");
+  it("rostr 以外のセッションは無視する", () => {
+    const parsed = parseListSessions("rostr-abc\t/work\t1700000000\nmy-work\t/other\t1700000001\n");
     expect(parsed.map((s) => s.id)).toEqual(["abc"]);
   });
 
   it("空行や欠けた行は捨てる", () => {
-    const parsed = parseListSessions("\nma-broken\n\nma-abc\t/work\t1700000000\n");
+    const parsed = parseListSessions("\nrostr-broken\n\nrostr-abc\t/work\t1700000000\n");
     expect(parsed.map((s) => s.id)).toEqual(["abc"]);
   });
 
   it("作成時刻が読めなければ現在時刻で埋める", () => {
     const before = Date.now();
-    const [session] = parseListSessions("ma-abc\t/work\t-\n");
+    const [session] = parseListSessions("rostr-abc\t/work\t-\n");
     expect(session.createdAt).toBeGreaterThanOrEqual(before);
   });
 
@@ -196,8 +196,8 @@ describe("writeTmuxConf", () => {
 
 describe("buildSourceFileArgs", () => {
   it("指定ソケットの tmux サーバに設定を読み直させる", () => {
-    const args = buildSourceFileArgs("multi-agent", "/tmp/ma.conf");
-    expect(args).toEqual(["-L", "multi-agent", "source-file", "/tmp/ma.conf"]);
+    const args = buildSourceFileArgs("rostr", "/tmp/rostr.conf");
+    expect(args).toEqual(["-L", "rostr", "source-file", "/tmp/rostr.conf"]);
   });
 });
 
@@ -206,8 +206,8 @@ describe("buildSourceFileArgs", () => {
  * 本物の tmux を専用ソケットで起こして、実際にそうなっているかを確かめる。
  */
 describe.skipIf(!isTmuxAvailable())("本物の tmux に設定を読ませる", () => {
-  const socket = "multi-agent-test-conf";
-  const name = "ma-test-conf";
+  const socket = "rostr-test-conf";
+  const name = "rostr-test";
   const tmux = (...args: string[]) =>
     spawnSync("tmux", ["-L", socket, ...args], { encoding: "utf8" });
   const display = (format: string) =>
@@ -309,11 +309,11 @@ describe.skipIf(!isTmuxAvailable())("本物の tmux に設定を読ませる", (
 
 describe("isTmuxAvailable", () => {
   afterEach(() => {
-    delete process.env.MA_TMUX;
+    delete process.env.ROSTR_TMUX;
   });
 
-  it("MA_TMUX=0 なら無効", () => {
-    process.env.MA_TMUX = "0";
+  it("ROSTR_TMUX=0 なら無効", () => {
+    process.env.ROSTR_TMUX = "0";
     expect(isTmuxAvailable()).toBe(false);
   });
 });

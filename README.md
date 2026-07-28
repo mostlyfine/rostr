@@ -1,82 +1,93 @@
-# multi-agent
+# rostr
 
-複数の Claude Code セッションをブラウザから起動・監視・終了するツール。左サイドバーにエージェントを状態ごとにまとめて表示し、投入したプロンプトと今実行中の内容を並べる。クリックすると右側に xterm.js のターミナルが出る。
+A tool for launching, monitoring, and ending multiple Claude Code sessions from the browser. The left sidebar groups agents by state and shows both the prompt you submitted and what the agent is currently running. Clicking an agent opens an xterm.js terminal on the right.
 
-## 必要なもの
+## Requirements
 
-- Node.js 22 以上
-- `claude` CLI（PATH 上にあること。`CLAUDE_BIN` で差し替え可能）
-- `tmux`（任意。あるとサーバを再起動してもエージェントが生き残る。無ければ従来どおり直接起動する）
+- Node.js 22 or later
+- The `claude` CLI (must be on `PATH`; override it with `CLAUDE_BIN`)
+- `tmux` (optional. With it, agents survive a server restart. Without it, agents are spawned directly as before.)
 
-## 起動
+## Getting started
 
 ```bash
 npm install
-npm run dev      # vite (5173) と server (8787) を同時に起動
+npm run dev      # runs vite (5173) and the server (8787) together
 ```
 
-http://localhost:5173 を開く。
+Open http://localhost:5173.
 
-本番向けにビルドしたものを単一ポートで動かす場合:
+To run a production build on a single port:
 
 ```bash
 npm run build
 npm run server   # http://localhost:8787
 ```
 
-## 環境変数
+## Environment variables
 
-| 変数 | 既定値 | 内容 |
+| Variable | Default | Description |
 | --- | --- | --- |
-| `PORT` | `8787` | サーバのポート |
-| `CLAUDE_BIN` | `claude` | 起動するエージェントのバイナリ |
-| `MA_TMUX` | （自動判定） | `0` にすると tmux を使わず直接起動する |
+| `PORT` | `8787` | Server port |
+| `CLAUDE_BIN` | `claude` | Binary launched for each agent |
+| `ROSTR_TMUX` | (auto-detected) | Set to `0` to skip tmux and spawn directly |
 
-## 仕組み
+## How it works
 
-- 各エージェントは `node-pty` の擬似端末で `claude --session-id <uuid> --settings <一時ファイル>` として起動する。対話 TUI をそのままブラウザへ流すため、Agent SDK やヘッドレスモードは使わない。
-- tmux があるときは、その擬似端末が繋ぐ先を tmux セッション（`tmux -L multi-agent`、セッション名 `ma-<uuid>`）にする。エージェント本体を持つのは tmux サーバなので、Node のサーバは一時的に attach しているクライアントでしかない。
-- `--settings` で渡す一時ファイルには状態通知用の hook だけが入る。ユーザー自身の `~/.claude/settings.json` の設定は残る。
-- hook は `server/hook-notify.mjs` を起動し、stdin の JSON を `POST /api/hook/:id` へ転送する。サーバはそれを `server/state.ts` の純関数で状態へ変換する。
+- Each agent runs in a `node-pty` pseudo terminal as `claude --session-id <uuid> --settings <temp file>`. The interactive TUI is streamed to the browser as-is, so neither the Agent SDK nor headless mode is used.
+- When tmux is available, that pseudo terminal attaches to a tmux session instead (socket `rostr`, session name `rostr-<uuid>`). The tmux server owns the agent process, so the Node server is only a client that happens to be attached.
+- The temp file passed to `--settings` contains nothing but the hooks used for state notifications. Your own `~/.claude/settings.json` stays in effect.
+- Each hook runs `server/hook-notify.mjs`, which forwards the JSON on stdin to `POST /api/hook/:id`. The server turns that into a state via the pure functions in `server/state.ts`.
 
-| hook イベント | 状態 |
+| Hook event | State |
 | --- | --- |
-| `SessionStart` | 待機（前の会話のプロンプトと実行内容を消す） |
-| `UserPromptSubmit` | 実行中（プロンプトを記録） |
-| `PreToolUse` | 実行中（`Bash npm test` のようなサマリを表示） |
-| `Notification` | 要対応（権限確認・入力待ち） |
-| `Stop` | 完了 |
-| `SessionEnd` | 終了 |
+| `SessionStart` | Idle (clears the prompt and activity of the previous conversation) |
+| `UserPromptSubmit` | Running (records the prompt) |
+| `PreToolUse` | Running (shows a summary such as `Bash npm test`) |
+| `Notification` | Needs attention (permission prompt or waiting for input) |
+| `Stop` | Done |
+| `SessionEnd` | Ended |
 
-- どの状態も後から来たイベントで上書きされる。「終了」も同じで、そこで固定はしない。worktree への移動や `/clear` では、エージェントが生きたまま会話セッションだけが終わって `SessionEnd` が飛ぶため、固定すると動き続けている行が二度と更新されなくなる。エージェントが本当に終わった場合は PTY の終了が一覧から行ごと消す。
+- No state is final; any later event overwrites it. That includes "Ended". Moving to a worktree or running `/clear` ends only the conversation while the agent stays alive, and it fires `SessionEnd` — pinning that state would leave a still-running row frozen forever. When an agent really does exit, the PTY closing removes its row from the list.
 
-- 一覧の変化は SSE (`GET /api/events`)、ターミナルの入出力は WebSocket (`/ws?session=<id>`) で流す。
-- ブラウザを閉じても PTY は生き続け、再接続時に直近 200KB のスクロールバックを復元する。
+- List changes are streamed over SSE (`GET /api/events`), and terminal I/O over WebSocket (`/ws?session=<id>`).
+- Closing the browser leaves the PTY running; reconnecting restores the most recent 200KB of scrollback.
 
-### 過去のやり取りを遡る
+### Scrolling back through past output
 
-ターミナル上でホイールを上に回すと、それより前の出力へ遡れる。
+Scrolling the wheel up in the terminal moves back through earlier output.
 
-- tmux があるときは tmux の履歴（10 万行）を読む。ホイールを上に回した時点で copy-mode に入り、最下部まで戻ると自動で抜けて通常の入力に戻る。途中でやめたいときは `q` を押す。copy-mode 中は矢印キーと PageUp / PageDown でも動かせる。
-- 遡る操作は tmux の既定のキーバインドがそのまま担当する。こちらで足しているのは `mouse on` だけで、キーバインドは一つも触っていない。
-- マウス操作を tmux 側で受けるようになるので、ドラッグは tmux の選択（copy-mode）になる。ブラウザ側で文字を選択してコピーしたいときは Option（Mac）または Shift を押しながらドラッグする。
-- tmux が無い環境、または `MA_TMUX=0` のときは xterm.js 側のスクロールバック（1 万行）を遡る。
+- With tmux, you are reading tmux's own history (100,000 lines). Scrolling up enters copy-mode, and scrolling back to the bottom leaves it automatically and returns to normal input. Press `q` to leave early. While in copy-mode, the arrow keys and PageUp / PageDown work too.
+- Scrolling is handled entirely by tmux's default key bindings. The only thing added here is `mouse on`; not a single key binding is touched.
+- Because tmux now receives mouse events, dragging becomes a tmux selection (copy-mode). To select and copy text in the browser instead, hold Option (Mac) or Shift while dragging.
+- Without tmux, or with `ROSTR_TMUX=0`, you scroll through xterm.js's own scrollback (10,000 lines).
 
-### tmux によるプロセスの永続化
+### Process persistence with tmux
 
-tmux があると、サーバを止めても・落ちてもエージェントは動き続ける。次の起動時に `tmux list-sessions` から `ma-` で始まるセッションを拾い直し、attach し直して一覧に戻す。
+With tmux, agents keep running whether you stop the server or it crashes. On the next start, sessions whose names begin with `rostr-` are picked up from `tmux list-sessions`, re-attached, and put back in the list.
 
-- ユーザー個人の tmux サーバや `~/.tmux.conf` には触らない。専用ソケット `-L multi-agent` と専用の最小設定ファイルだけを使う。その設定では prefix を無効化してあるので、`C-b` などのキーは tmux に吸われず Claude の TUI にそのまま届く。キーボードのキーは一つも奪っていない。
-- 設定ファイルは tmux サーバの起動時にしか読まれないため、セッションを作るときと復元するときに `source-file` で読み直させる。既にエージェントを抱えたまま動いているサーバにも、エージェントを落とさずに新しい設定が届く。
-- 復元できるのは作業ディレクトリと作成時刻まで。状態・プロンプト・実行中の内容は hook 由来なので復元時は「待機中」に戻り、次の hook イベントで追いつく。
-- セッションが終わるのは、一覧の `x` で閉じたときと、`claude` 自身が終了したとき。
-- tmux が無い環境、または `MA_TMUX=0` のときは直接起動にフォールバックする。この場合はサーバを止めると全セッションが終了する。
+- Your personal tmux server and `~/.tmux.conf` are left alone. Only a dedicated socket (`-L rostr`) and a dedicated minimal config file are used. That config disables the prefix, so keys such as `C-b` are not swallowed by tmux and reach Claude's TUI directly. No keyboard key is taken away.
+- Because a tmux server reads its config only at startup, the config is re-read with `source-file` when a session is created and when one is restored. That way a server already holding agents receives the new config without any of them being killed.
+- Only the working directory and creation time can be restored. State, prompt, and current activity all come from hooks, so a restored agent starts as "Idle" and catches up on the next hook event.
+- A session ends only when it is closed with `x` in the list, or when `claude` itself exits.
+- Without tmux, or with `ROSTR_TMUX=0`, it falls back to spawning directly. In that case stopping the server ends every session.
 
 ```bash
-tmux -L multi-agent ls        # 生きているエージェントを直接確認する
+tmux -L rostr ls        # inspect the live agents directly
 ```
 
-## テスト
+### Migrating from the old name
+
+This project used to be called `multi-agent`, and its tmux socket, session prefix, and environment variable were named accordingly. Agents started before the rename live on the old socket and are not picked up any more, although their processes keep running. Inspect them and shut the old server down once you no longer need them:
+
+```bash
+tmux -L multi-agent ls          # what is still running under the old name
+tmux -L multi-agent kill-server # ends every one of them
+```
+
+`MA_TMUX` is now `ROSTR_TMUX`, so update any environment that still sets the old variable.
+
+## Tests
 
 ```bash
 npm test        # vitest

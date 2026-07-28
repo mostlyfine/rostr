@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 /** ユーザー個人の tmux サーバと混ざらないよう、専用ソケットで動かす。 */
-export const DEFAULT_TMUX_SOCKET = "multi-agent";
+export const DEFAULT_TMUX_SOCKET = "rostr";
 
 /** tmux セッション名の前置き。名前の残りがそのままセッション id になる。 */
-const SESSION_PREFIX = "ma-";
+const SESSION_PREFIX = "rostr-";
 
 /**
  * ユーザーの ~/.tmux.conf を読ませないための最小設定。
@@ -70,7 +70,7 @@ export const sessionIdFromName = (name: string): string | undefined => {
 
 /** 設定を一時ファイルへ書き出し、そのパスを返す。 */
 export const writeTmuxConf = (): string => {
-  const dir = join(tmpdir(), "multi-agent-settings");
+  const dir = join(tmpdir(), "rostr-settings");
   mkdirSync(dir, { recursive: true });
   const path = join(dir, "tmux.conf");
   writeFileSync(path, TMUX_CONF, "utf8");
@@ -84,8 +84,8 @@ export const writeTmuxConf = (): string => {
 export const buildAgentCommand = (options: AgentCommandOptions): string[] => [
   "env",
   ...options.unsetKeys.flatMap((key) => ["-u", key]),
-  `MA_SESSION_ID=${options.sessionId}`,
-  `MA_PORT=${options.port}`,
+  `ROSTR_SESSION_ID=${options.sessionId}`,
+  `ROSTR_PORT=${options.port}`,
   options.agentBin,
   ...options.args,
 ];
@@ -163,9 +163,9 @@ export const parseListSessions = (stdout: string): TmuxSessionInfo[] => {
 
 let available: boolean | undefined;
 
-/** tmux が使えるか。MA_TMUX=0 で明示的に無効化できる。 */
+/** tmux が使えるか。ROSTR_TMUX=0 で明示的に無効化できる。 */
 export const isTmuxAvailable = (): boolean => {
-  if (process.env.MA_TMUX === "0") return false;
+  if (process.env.ROSTR_TMUX === "0") return false;
   if (available === undefined) {
     const result = spawnSync("tmux", ["-V"], { stdio: "ignore" });
     available = result.status === 0;
@@ -194,7 +194,7 @@ export const killTmuxSession = (socket: string, name: string): void => {
   spawnSync("tmux", buildKillArgs(socket, name), { stdio: "ignore" });
 };
 
-/** 生き残っている multi-agent のセッションを列挙する。 */
+/** 生き残っている rostr のセッションを列挙する。 */
 export const listTmuxSessions = (socket: string): TmuxSessionInfo[] => {
   const result = spawnSync("tmux", buildListArgs(socket), { encoding: "utf8" });
   // tmux サーバがまだ無いときは "error connecting to ..." で非ゼロ終了する。0 件として扱う。
