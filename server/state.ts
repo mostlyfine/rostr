@@ -55,12 +55,17 @@ export const applyHookEvent = (session: Session, event: HookEvent): Partial<Sess
     // 会話が作り直された。前の会話のプロンプトと実行内容は残しても誤解を招くだけなので消す。
     case "SessionStart":
       return { state: "idle", prompt: "", activity: "" };
-    case "UserPromptSubmit":
+    case "UserPromptSubmit": {
+      const prompt = event.prompt ?? "";
+      // バックグラウンドタスク完了通知が次のターンとして自動挿入された場合もこのイベントが
+      // 発火する。ユーザーの実入力ではないので、サイドバーの表示は書き換えない。
+      if (prompt.includes("<task-notification")) return {};
       return {
         state: "working",
-        prompt: truncateOneLine(event.prompt ?? ""),
+        prompt: truncateOneLine(prompt),
         activity: "",
       };
+    }
     case "PreToolUse":
       return {
         state: "working",
