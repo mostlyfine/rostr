@@ -7,6 +7,7 @@ import "@xterm/xterm/css/xterm.css";
 import type { ClientMessage } from "../../common/types";
 import { XTERM_THEMES } from "../theme";
 import { createTerminalOptions } from "../terminalOptions";
+import { SHIFT_ENTER_INPUT, isShiftEnter } from "../terminalKeys";
 import { useTheme } from "../composables/useTheme";
 
 const props = defineProps<{ sessionId: string; visible: boolean }>();
@@ -42,6 +43,14 @@ onMounted(() => {
   term.loadAddon(new WebLinksAddon());
   term.open(host.value!);
   term.onData((data) => send({ type: "input", data }));
+  // Shift+Enter だけは xterm の既定（CR 送出）を止めて自前で送る。claude の /terminal-setup が
+  // iTerm2 などに設定するのと同じシーケンスなので、ローカルのターミナルと同じ操作感になる。
+  term.attachCustomKeyEventHandler((event) => {
+    if (!isShiftEnter(event)) return true;
+    // このハンドラは keydown と keypress の両方で呼ばれるので、送信は keydown の一度だけにする。
+    if (event.type === "keydown") send({ type: "input", data: SHIFT_ENTER_INPUT });
+    return false;
+  });
 
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   socket = new WebSocket(`${protocol}//${location.host}/ws?session=${props.sessionId}`);
