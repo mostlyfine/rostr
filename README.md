@@ -41,11 +41,14 @@ npm run server   # http://localhost:8787
 
 | hook イベント | 状態 |
 | --- | --- |
+| `SessionStart` | 待機（前の会話のプロンプトと実行内容を消す） |
 | `UserPromptSubmit` | 実行中（プロンプトを記録） |
 | `PreToolUse` | 実行中（`Bash npm test` のようなサマリを表示） |
 | `Notification` | 要対応（権限確認・入力待ち） |
 | `Stop` | 完了 |
 | `SessionEnd` | 終了 |
+
+- どの状態も後から来たイベントで上書きされる。「終了」も同じで、そこで固定はしない。worktree への移動や `/clear` では、エージェントが生きたまま会話セッションだけが終わって `SessionEnd` が飛ぶため、固定すると動き続けている行が二度と更新されなくなる。エージェントが本当に終わった場合は PTY の終了が一覧から行ごと消す。
 
 - 一覧の変化は SSE (`GET /api/events`)、ターミナルの入出力は WebSocket (`/ws?session=<id>`) で流す。
 - ブラウザを閉じても PTY は生き続け、再接続時に直近 200KB のスクロールバックを復元する。

@@ -18,6 +18,7 @@ export interface Session {
 
 /** 状態遷移に必要な hook イベント。設定生成と状態遷移の両方がこの一覧を参照する。 */
 export const HOOKED_EVENTS = [
+  "SessionStart",
   "UserPromptSubmit",
   "PreToolUse",
   "PostToolUse",
