@@ -8,6 +8,12 @@ import type { ClientMessage } from "../../common/types";
 import { XTERM_THEMES } from "../theme";
 import { createTerminalOptions } from "../terminalOptions";
 import { SHIFT_ENTER_INPUT, isShiftEnter } from "../terminalKeys";
+import {
+  createWheelAccumulator,
+  installMouseReportFilter,
+  sgrWheelSequence,
+  toCell,
+} from "../terminalMouse";
 import { useTheme } from "../composables/useTheme";
 
 const props = defineProps<{ sessionId: string; visible: boolean }>();
@@ -19,6 +25,10 @@ let term: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
 let socket: WebSocket | null = null;
 let observer: ResizeObserver | null = null;
+/** 文字が描かれている領域。ホイールの位置をセル座標へ直すのに寸法が要る。 */
+let screen: HTMLElement | null = null;
+/** 1 セルの大きさ。ホイールのたびに測るとレイアウトを叩くので、fit のときだけ測り直す。 */
+let cell: { width: number; height: number } | null = null;
 
 const send = (message: ClientMessage) => {
   if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
@@ -34,6 +44,12 @@ const fit = () => {
     return;
   }
   send({ type: "resize", cols: term.cols, rows: term.rows });
+  // xterm はセル寸法を公開していないので、描かれている領域の実寸を列数・行数で割って求める。
+  const rect = screen?.getBoundingClientRect();
+  cell =
+    rect && rect.width > 0 && rect.height > 0
+      ? { width: rect.width / term.cols, height: rect.height / term.rows }
+      : null;
 };
 
 onMounted(() => {
@@ -42,6 +58,7 @@ onMounted(() => {
   term.loadAddon(fitAddon);
   term.loadAddon(new WebLinksAddon());
   term.open(host.value!);
+  screen = term.element!.querySelector(".xterm-screen");
   term.onData((data) => send({ type: "input", data }));
   // Shift+Enter だけは xterm の既定（CR 送出）を止めて自前で送る。claude の /terminal-setup が
   // iTerm2 などに設定するのと同じシーケンスなので、ローカルのターミナルと同じ操作感になる。
@@ -49,6 +66,31 @@ onMounted(() => {
     if (!isShiftEnter(event)) return true;
     // このハンドラは keydown と keypress の両方で呼ばれるので、送信は keydown の一度だけにする。
     if (event.type === "keydown") send({ type: "input", data: SHIFT_ENTER_INPUT });
+    return false;
+  });
+
+  // tmux が要求してくるマウス報告は xterm に渡さない。渡すと xterm が選択機能ごと切ってしまい
+  // （SelectionService.disable）、ブラウザでの文字選択とコピーができなくなる。
+  // 代わりにホイールだけを下のハンドラが自前で tmux へ送るので、履歴スクロールは残る。
+  const isMouseReportWanted = installMouseReportFilter(term);
+
+  // 報告を落とした以上、ホイールは xterm からは PTY へ流れない。tmux の copy-mode へ入る
+  // 唯一の入口なので、SGR マウス報告の形に組み立てて送る。相手が報告を要求していないとき
+  // （tmux 無しの構成）は何もせず、xterm 本来のスクロール動作に任せる。
+  const accumulateWheel = createWheelAccumulator();
+  term.attachCustomWheelEventHandler((event) => {
+    if (!isMouseReportWanted()) return true;
+    if (!term || !screen || !cell) return false;
+
+    const lines = accumulateWheel(event.deltaY, event.deltaMode, cell.height);
+    event.preventDefault();
+    // 1 セルに満たない動きは持ち越されている。座標を測るのは実際に送るときだけでよい。
+    if (lines === 0) return false;
+
+    const rect = screen.getBoundingClientRect();
+    const col = toCell(event.clientX - rect.left, cell.width, term.cols);
+    const row = toCell(event.clientY - rect.top, cell.height, term.rows);
+    send({ type: "input", data: sgrWheelSequence(lines < 0, col, row).repeat(Math.abs(lines)) });
     return false;
   });
 

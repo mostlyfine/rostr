@@ -96,7 +96,7 @@ Scrolling the wheel up in the terminal moves back through earlier output.
 
 - With tmux, you are reading tmux's own history (100,000 lines). Scrolling up enters copy-mode, and scrolling back to the bottom leaves it automatically and returns to normal input. Press `q` to leave early. While in copy-mode, the arrow keys and PageUp / PageDown work too.
 - Scrolling is handled entirely by tmux's default key bindings. The only thing added here is `mouse on`; not a single key binding is touched.
-- Because tmux now receives mouse events, dragging becomes a tmux selection (copy-mode). To select text in the browser instead, hold Option (Mac) or Shift while dragging, then copy it with `Cmd+C` (`Ctrl+Shift+C` elsewhere).
+- Dragging still selects text in the browser: just drag and press `Cmd+C` (`Ctrl+Shift+C` elsewhere). xterm.js turns its selection off whenever an application asks for mouse reporting, so the browser swallows tmux's request and synthesizes the wheel events itself instead. The cost is that programs inside the session (vim, less, …) never see the mouse.
 - Without tmux, or with `ROSTR_TMUX=0`, you scroll through xterm.js's own scrollback (10,000 lines).
 
 ### Inserting a newline in the prompt

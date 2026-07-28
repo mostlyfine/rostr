@@ -23,7 +23,8 @@ const TMUX_CONF = [
   "set -g history-limit 100000",
   // ホイールを tmux まで届けるための唯一の設定。root の既定バインド
   // WheelUpPane -> copy-mode -e がそのまま履歴の入口になり、最下部まで戻ると自動で抜ける。
-  // 代償として、ブラウザでの文字選択は Option(Mac) / Shift を押しながらのドラッグになる。
+  // tmux が要求するマウス報告はブラウザ側で握り潰し、ホイールだけ自前で組み立てて送る
+  // （src/terminalMouse.ts）。tmux は要求が通ったかを知らないので、これで両立する。
   "set -g mouse on",
   'set -g default-terminal "xterm-256color"',
   "set -g allow-passthrough on",
