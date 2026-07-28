@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { Session } from "../../common/types";
-import { groupByState } from "../sessionGroups";
+import { toSidebarRows } from "../sessionGroups";
 import SessionItem from "./SessionItem.vue";
 
 const props = defineProps<{ sessions: Session[]; selectedId: string | null }>();
 const emit = defineEmits<{ select: [id: string]; close: [id: string]; create: [] }>();
 
-const groups = computed(() => groupByState(props.sessions));
+const rows = computed(() => toSidebarRows(props.sessions));
 </script>
 
 <template>
@@ -22,22 +22,21 @@ const groups = computed(() => groupByState(props.sessions));
         エージェントがありません。「+ 新規」から起動してください。
       </p>
 
-      <section v-for="group in groups" :key="group.state" class="group">
-        <h2 class="group-label">
-          <span data-test="group-label">{{ group.label }}</span>
-          <span class="count">{{ group.sessions.length }}</span>
-        </h2>
-        <ul>
+      <TransitionGroup tag="ul" name="row" class="rows">
+        <template v-for="row in rows" :key="row.key">
+          <li v-if="row.kind === 'header'" class="group-label">
+            <span data-test="group-label">{{ row.label }}</span>
+            <span class="count">{{ row.count }}</span>
+          </li>
           <SessionItem
-            v-for="session in group.sessions"
-            :key="session.id"
-            :session="session"
-            :selected="session.id === props.selectedId"
+            v-else
+            :session="row.session"
+            :selected="row.session.id === props.selectedId"
             @select="emit('select', $event)"
             @close="emit('close', $event)"
           />
-        </ul>
-      </section>
+        </template>
+      </TransitionGroup>
     </div>
   </aside>
 </template>
@@ -86,19 +85,18 @@ h1 {
   line-height: 1.6;
   padding: 8px;
 }
-.group + .group {
-  margin-top: 14px;
-}
 .group-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 0 4px;
-  padding: 0 4px;
+  padding: 2px 4px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: #8b93a3;
+}
+.group-label:not(:first-child) {
+  margin-top: 12px;
 }
 .count {
   background: #262c38;
@@ -107,12 +105,33 @@ h1 {
   padding: 0 6px;
   font-size: 10px;
 }
-ul {
+.rows {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* 抜けていく行を absolute で浮かせるので、その基準になる。 */
+  position: relative;
+}
+
+/* 状態が変わった行が別のグループへ動く様子を追えるようにする。 */
+.row-move {
+  transition: transform 260ms ease;
+}
+.row-enter-active,
+.row-leave-active {
+  transition: opacity 160ms ease;
+}
+.row-enter-from,
+.row-leave-to {
+  opacity: 0;
+}
+/* 消えていく行を流れから外し、残った行がその場で詰まれるようにする。 */
+.row-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
 }
 </style>
