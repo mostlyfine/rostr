@@ -2,80 +2,154 @@
  * 色はすべてここのトークン経由で参照する。各コンポーネントの <style scoped> は
  * セレクタこそスコープ化されるが、CSS 変数は普通に継承されるので var() で届く。
  * data-theme は index.html のインラインスクリプトと useTheme が <html> に付ける。
+ *
+ * 配色は Catppuccin（light = Latte / dark = Macchiato）。--ctp-* は catppuccin/palette
+ * の生パレットで、UI 要素への割り当ては catppuccin/nvim の highlight group の慣習に
+ * 合わせている。コンポーネントからは --ctp-* を直接使わず、必ず下の意味付きトークンを
+ * 経由すること。パレット層を挟んでいるのは、割り当ての根拠を追えるようにするため。
  */
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg-app: #0d1117;
-  --bg-sidebar: #161a22;
-  --bg-surface: #1b202a;
-  --bg-input: #11151c;
-  --bg-control: #232a36;
-  --bg-control-hover: #2d3644;
-  --bg-hover: #1f2430;
-  --bg-selected: #2a3140;
-  --bg-badge: #262c38;
-  --bg-danger-hover: #3b3040;
-  --bg-backdrop: rgba(0, 0, 0, 0.55);
+  /* Catppuccin Macchiato */
+  --ctp-rosewater: #f4dbd6;
+  --ctp-flamingo: #f0c6c6;
+  --ctp-pink: #f5bde6;
+  --ctp-mauve: #c6a0f6;
+  --ctp-red: #ed8796;
+  --ctp-maroon: #ee99a0;
+  --ctp-peach: #f5a97f;
+  --ctp-yellow: #eed49f;
+  --ctp-green: #a6da95;
+  --ctp-teal: #8bd5ca;
+  --ctp-sky: #91d7e3;
+  --ctp-sapphire: #7dc4e4;
+  --ctp-blue: #8aadf4;
+  --ctp-lavender: #b7bdf8;
+  --ctp-text: #cad3f5;
+  --ctp-subtext1: #b8c0e0;
+  --ctp-subtext0: #a5adcb;
+  --ctp-overlay2: #939ab7;
+  --ctp-overlay1: #8087a2;
+  --ctp-overlay0: #6e738d;
+  --ctp-surface2: #5b6078;
+  --ctp-surface1: #494d64;
+  --ctp-surface0: #363a4f;
+  --ctp-base: #24273a;
+  --ctp-mantle: #1e2030;
+  --ctp-crust: #181926;
 
-  --text: #d8dee9;
-  --text-strong: #e6e9ef;
-  --text-secondary: #b9c0cd;
-  --text-tertiary: #8b93a3;
-  --text-muted: #6b7280;
-  --text-link: #8fb3e0;
-  --text-danger: #f87171;
-  --text-on-accent: #ffffff;
+  --bg-app: var(--ctp-base);
+  --bg-sidebar: var(--ctp-mantle);
+  --bg-surface: var(--ctp-surface0);
+  --bg-input: var(--ctp-crust);
+  --bg-control: var(--ctp-surface1);
+  --bg-control-hover: var(--ctp-surface2);
+  --bg-hover: var(--ctp-surface0);
+  --bg-selected: var(--ctp-surface1);
+  --bg-badge: var(--ctp-surface1);
+  --bg-danger-hover: color-mix(in srgb, var(--ctp-red) 12%, var(--bg-sidebar));
+  --bg-backdrop: rgba(24, 25, 38, 0.6); /* crust + α */
 
-  --border: #262c38;
-  --border-strong: #2f3746;
-  --border-control: #3b4252;
+  --text: var(--ctp-subtext1);
+  --text-strong: var(--ctp-text);
+  --text-secondary: var(--ctp-subtext0);
+  --text-tertiary: var(--ctp-overlay2);
+  --text-muted: var(--ctp-overlay1);
+  --text-link: var(--ctp-blue);
+  --text-danger: var(--ctp-red);
+  --text-on-accent: var(--ctp-base);
 
-  --accent: #2563eb;
-  --focus-ring: #3b82f6;
+  --border: var(--ctp-surface0);
+  --border-strong: var(--ctp-surface1);
+  --border-control: var(--ctp-surface2);
 
-  --state-waiting: #f59e0b;
-  --state-working: #3b82f6;
-  --state-done: #22c55e;
-  --state-exited: #4b5563;
+  --accent: var(--ctp-blue);
+  --focus-ring: var(--ctp-lavender);
+
+  --state-waiting: var(--ctp-yellow);
+  --state-working: var(--ctp-blue);
+  --state-done: var(--ctp-green);
+  --state-exited: var(--ctp-overlay0);
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg-app: #f7f9fb;
-  --bg-sidebar: #f6f8fa;
-  --bg-surface: #ffffff;
-  --bg-input: #ffffff;
-  --bg-control: #f6f8fa;
-  --bg-control-hover: #eaeef2;
-  --bg-hover: #eef1f5;
-  --bg-selected: #dfe6f0;
-  --bg-badge: #e4e8ee;
-  --bg-danger-hover: #ffe9e9;
-  --bg-backdrop: rgba(0, 0, 0, 0.35);
+  /* Catppuccin Latte */
+  --ctp-rosewater: #dc8a78;
+  --ctp-flamingo: #dd7878;
+  --ctp-pink: #ea76cb;
+  --ctp-mauve: #8839ef;
+  --ctp-red: #d20f39;
+  --ctp-maroon: #e64553;
+  --ctp-peach: #fe640b;
+  --ctp-yellow: #df8e1d;
+  --ctp-green: #40a02b;
+  --ctp-teal: #179299;
+  --ctp-sky: #04a5e5;
+  --ctp-sapphire: #209fb5;
+  --ctp-blue: #1e66f5;
+  --ctp-lavender: #7287fd;
+  --ctp-text: #4c4f69;
+  --ctp-subtext1: #5c5f77;
+  --ctp-subtext0: #6c6f85;
+  --ctp-overlay2: #7c7f93;
+  --ctp-overlay1: #8c8fa1;
+  --ctp-overlay0: #9ca0b0;
+  --ctp-surface2: #acb0be;
+  --ctp-surface1: #bcc0cc;
+  --ctp-surface0: #ccd0da;
+  --ctp-base: #eff1f5;
+  --ctp-mantle: #e6e9ef;
+  --ctp-crust: #dce0e8;
 
-  --text: #1f2328;
-  --text-strong: #0d1117;
-  --text-secondary: #424a53;
-  --text-tertiary: #57606a;
-  --text-muted: #6e7781;
-  --text-link: #0a58ca;
-  --text-danger: #cf222e;
-  --text-on-accent: #ffffff;
+  /*
+   * Latte は base 側が明るいぶん階調の幅が狭いので、Macchiato とは2点だけ割り当てを
+   * 変えている。(1) 「浮いた面」は base が最も明るいのでダイアログに base を使う
+   * （Macchiato では base より明るい surface0）。(2) テキストを載せる面は surface0
+   * までに留める（下の --text-muted も参照）。catppuccin/nvim 自身も
+   * U.vary_color({ latte = ... }) で flavor ごとに割り当てを変えている。
+   */
+  --bg-app: var(--ctp-base);
+  --bg-sidebar: var(--ctp-mantle);
+  --bg-surface: var(--ctp-base);
+  --bg-input: var(--ctp-crust);
+  --bg-control: var(--ctp-surface0);
+  --bg-control-hover: var(--ctp-surface1);
+  --bg-hover: var(--ctp-surface0);
+  --bg-selected: var(--ctp-surface1);
+  --bg-badge: var(--ctp-surface0);
+  --bg-danger-hover: color-mix(in srgb, var(--ctp-red) 12%, var(--bg-sidebar));
+  --bg-backdrop: rgba(76, 79, 105, 0.35); /* text + α */
 
-  --border: #d8dee4;
-  --border-strong: #c9d1d9;
-  --border-control: #c9d1d9;
+  --text: var(--ctp-subtext1);
+  --text-strong: var(--ctp-text);
+  --text-secondary: var(--ctp-subtext0);
+  --text-tertiary: var(--ctp-overlay2);
+  /*
+   * Catppuccin が Latte でテキストに使う最も薄い階調は overlay2（Comment がこれ）で、
+   * overlay1 以下は LineNr のような非テキスト用。空状態の説明文などに overlay1 を使うと
+   * 2.6:1 まで落ちて読めないので、Latte では tertiary と同じ overlay2 で止める。
+   * Macchiato は overlay1 でも 4.5:1 を超えるのでそちらは一段深くしている。
+   */
+  --text-muted: var(--ctp-overlay2);
+  --text-link: var(--ctp-blue);
+  --text-danger: var(--ctp-red);
+  --text-on-accent: var(--ctp-base);
 
-  --accent: #2563eb;
-  --focus-ring: #2563eb;
+  --border: var(--ctp-surface0);
+  --border-strong: var(--ctp-surface1);
+  --border-control: var(--ctp-surface2);
 
-  --state-waiting: #9a6700;
-  --state-working: #2563eb;
-  --state-done: #1a7f37;
-  --state-exited: #7d8590;
+  --accent: var(--ctp-blue);
+  --focus-ring: var(--ctp-lavender);
+
+  --state-waiting: var(--ctp-yellow);
+  --state-working: var(--ctp-blue);
+  --state-done: var(--ctp-green);
+  --state-exited: var(--ctp-overlay0);
 }
 
 :root {
