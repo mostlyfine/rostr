@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import type { AgentState, Session } from "../../common/types";
+import type { Session } from "../../common/types";
+import { NOTABLE_STATES } from "../sessionGroups";
 
 const props = defineProps<{ session: Session; selected: boolean }>();
 const emit = defineEmits<{ select: [id: string]; close: [id: string] }>();
-
-/** ユーザーの目を引きたい状態。どちらもこれ以上は勝手に進まず、人の操作を待っている。 */
-const NOTABLE: AgentState[] = ["waiting", "done"];
 
 const blink = ref(false);
 
@@ -17,7 +15,7 @@ const blink = ref(false);
 watch(
   () => props.session.state,
   (state) => {
-    if (!NOTABLE.includes(state)) return;
+    if (!NOTABLE_STATES.includes(state)) return;
     blink.value = true;
   },
 );

@@ -1,8 +1,6 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { execPath } from "node:process";
-import { join } from "node:path";
 import { HOOKED_EVENTS, type HookedEvent } from "../common/types";
+import { writeSettingsFile } from "./settingsDir";
 
 /** matcher を取るのはツール系イベントだけ。 */
 const MATCHER_EVENTS = new Set<HookedEvent>(["PreToolUse", "PostToolUse"]);
@@ -36,10 +34,5 @@ export const buildHookSettings = (notifyScriptPath: string): HookSettings => {
 };
 
 /** 設定を一時ファイルへ書き出し、そのパスを返す。 */
-export const writeHookSettings = (sessionId: string, notifyScriptPath: string): string => {
-  const dir = join(tmpdir(), "rostr-settings");
-  mkdirSync(dir, { recursive: true });
-  const path = join(dir, `${sessionId}.json`);
-  writeFileSync(path, JSON.stringify(buildHookSettings(notifyScriptPath), null, 2), "utf8");
-  return path;
-};
+export const writeHookSettings = (sessionId: string, notifyScriptPath: string): string =>
+  writeSettingsFile(`${sessionId}.json`, JSON.stringify(buildHookSettings(notifyScriptPath), null, 2));
