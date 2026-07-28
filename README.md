@@ -8,6 +8,31 @@ A tool for launching, monitoring, and ending multiple Claude Code sessions from 
 - The `claude` CLI (must be on `PATH`; override it with `CLAUDE_BIN`)
 - `tmux` (optional. With it, agents survive a server restart. Without it, agents are spawned directly as before.)
 
+## Quick start (no clone)
+
+Run rostr directly from GitHub without cloning it into a project:
+
+```bash
+npx github:mostlyfine/rostr
+```
+
+The first run clones the repository, installs dependencies, builds the
+frontend, and starts the server on http://127.0.0.1:8787 (override with
+`PORT`). npm caches the resolved package under `~/.npm/_npx`, so subsequent
+runs with the same ref skip the rebuild and start immediately.
+
+To pin a specific branch, tag, or commit:
+
+```bash
+npx github:mostlyfine/rostr#v0.2.0
+npx github:mostlyfine/rostr#some-branch
+```
+
+The requirements above still apply, and the environment variables below
+(`PORT`, `CLAUDE_BIN`, `ROSTR_TMUX`) work the same way. This project is not
+published to the npm registry on purpose; the GitHub reference above is the
+only supported install method.
+
 ## Getting started
 
 ```bash
