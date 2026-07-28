@@ -142,6 +142,22 @@ describe("SessionManager", () => {
     }
   });
 
+  // node --watch の子は IPC で依存関係を報告する。エージェント内で走る別の node（vitest の
+  // forks プールなど）まで巻き込むと、そちらの IPC プロトコルが壊れる。
+  it("node --watch の印は子へ渡さない", async () => {
+    process.env.WATCH_REPORT_DEPENDENCIES = "1";
+    try {
+      const manager = newManager({ scrollbackChars: 4096 });
+      const session = manager.create("/tmp");
+      manager.write(session.id, 'echo "WATCH=[${WATCH_REPORT_DEPENDENCIES}]"\n');
+      // 打ち込んだ行がそのままエコーされるので、変数が展開された後の行だけを待つ。
+      await waitFor(() => /WATCH=\[1?\]/.test(manager.scrollback(session.id)));
+      expect(manager.scrollback(session.id)).toContain("WATCH=[]");
+    } finally {
+      delete process.env.WATCH_REPORT_DEPENDENCIES;
+    }
+  });
+
   it("buildArgs にセッション id が渡る", () => {
     const seen: string[] = [];
     const manager = newManager({
@@ -197,6 +213,20 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
     manager.write(session.id, 'echo "SID=${MA_SESSION_ID}"\n');
     await waitFor(() => manager.scrollback(session.id).includes(`SID=${session.id}`));
     expect(manager.scrollback(session.id)).toContain(`SID=${session.id}`);
+  });
+
+  it("tmux 越しでも node --watch の印は子へ渡らない", async () => {
+    process.env.WATCH_REPORT_DEPENDENCIES = "1";
+    try {
+      const manager = newTmuxManager();
+      const session = manager.create(process.cwd());
+      manager.write(session.id, 'echo "WATCH=[${WATCH_REPORT_DEPENDENCIES}]"\n');
+      // 打ち込んだ行がそのままエコーされるので、変数が展開された後の行だけを待つ。
+      await waitFor(() => /WATCH=\[1?\]/.test(manager.scrollback(session.id)));
+      expect(manager.scrollback(session.id)).toContain("WATCH=[]");
+    } finally {
+      delete process.env.WATCH_REPORT_DEPENDENCIES;
+    }
   });
 
   it("disposeAll してもエージェントは生き残る", async () => {
