@@ -6,12 +6,14 @@ import type { ClientMessage } from "../common/types";
 import { createApp } from "./app";
 import { writeHookSettings } from "./hookSettings";
 import { SessionManager } from "./sessions";
+import { createSummarizerFromEnv } from "./summary";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const notifyScriptPath = join(here, "hook-notify.mjs");
 
 const port = Number(process.env.PORT ?? 8787);
 const agentBin = process.env.CLAUDE_BIN ?? "claude";
+const { summarizer, model: summaryModel } = createSummarizerFromEnv(agentBin);
 
 const manager = new SessionManager({
   agentBin,
@@ -23,6 +25,7 @@ const manager = new SessionManager({
     writeHookSettings(sessionId, notifyScriptPath),
   ],
   port,
+  summarizer,
 });
 
 const app = createApp(manager, join(here, "..", "dist"));
@@ -97,6 +100,6 @@ if (recovered > 0) console.log(`tmux から ${recovered} 件のセッション�
 server.listen(port, () => {
   const tmuxState = manager.tmuxEnabled ? "on" : "off";
   console.log(
-    `rostr server listening on http://127.0.0.1:${port} (agent: ${agentBin}, tmux: ${tmuxState})`,
+    `rostr server listening on http://127.0.0.1:${port} (agent: ${agentBin}, tmux: ${tmuxState}, summary: ${summaryModel})`,
   );
 });
