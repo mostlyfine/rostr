@@ -88,6 +88,7 @@ const makeIdleSession = (id: string, cwd: string, createdAt: number): Session =>
   state: "idle",
   prompt: "",
   activity: "",
+  summary: "",
   createdAt,
   updatedAt: createdAt,
 });

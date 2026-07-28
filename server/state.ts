@@ -54,7 +54,7 @@ export const applyHookEvent = (session: Session, event: HookEvent): Partial<Sess
   switch (event.hook_event_name) {
     // 会話が作り直された。前の会話のプロンプトと実行内容は残しても誤解を招くだけなので消す。
     case "SessionStart":
-      return { state: "idle", prompt: "", activity: "" };
+      return { state: "idle", prompt: "", activity: "", summary: "" };
     case "UserPromptSubmit": {
       const prompt = event.prompt ?? "";
       // バックグラウンドタスク完了通知が次のターンとして自動挿入された場合もこのイベントが

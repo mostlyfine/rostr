@@ -9,6 +9,7 @@ const base: Session = {
   state: "idle",
   prompt: "",
   activity: "",
+  summary: "",
   createdAt: 0,
   updatedAt: 0,
 };
@@ -143,5 +144,22 @@ describe("applyHookEvent", () => {
       { hook_event_name: "UserPromptSubmit", prompt: "<task-notification>agent finished</task-notification>" },
     );
     expect(patch).toEqual({});
+  });
+});
+
+describe("applyHookEvent の summary", () => {
+  it("SessionStart は要約も消す", () => {
+    const session = { ...base, summary: "サイドバーの実装" };
+    expect(applyHookEvent(session, { hook_event_name: "SessionStart" })).toEqual({
+      state: "idle",
+      prompt: "",
+      activity: "",
+      summary: "",
+    });
+  });
+
+  it("Stop は要約を触らない", () => {
+    const patch = applyHookEvent(base, { hook_event_name: "Stop" });
+    expect(patch).not.toHaveProperty("summary");
   });
 });
