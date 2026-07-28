@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
 import Sidebar from "../../src/components/Sidebar.vue";
 import SessionItem from "../../src/components/SessionItem.vue";
-import { BLINK_MS } from "../../src/blink";
 import { toSidebarRows } from "../../src/sessionGroups";
 import type { Session } from "../../common/types";
 
@@ -170,9 +169,6 @@ describe("SessionItem", () => {
 });
 
 describe("SessionItem のブリンク", () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
-
   const mountWith = (state: Session["state"]) =>
     mount(SessionItem, { props: { session: session({ state }), selected: false } });
 
@@ -198,23 +194,20 @@ describe("SessionItem のブリンク", () => {
     expect(mountWith("done").classes()).not.toContain("blink");
   });
 
-  it("点滅時間を過ぎるとクラスが外れる", async () => {
+  it("クリックすると点滅が止まる", async () => {
     const wrapper = mountWith("working");
     await wrapper.setProps({ session: session({ state: "done" }) });
-    vi.advanceTimersByTime(BLINK_MS);
-    await wrapper.vm.$nextTick();
+    expect(wrapper.classes()).toContain("blink");
+
+    await wrapper.find("[data-test=session-body]").trigger("click");
     expect(wrapper.classes()).not.toContain("blink");
+    expect(wrapper.emitted("select")).toBeTruthy();
   });
 
-  it("続けて別の状態へ遷移すると点滅をやり直す", async () => {
+  it("続けて別の状態へ遷移しても点滅が続く", async () => {
     const wrapper = mountWith("working");
     await wrapper.setProps({ session: session({ state: "done" }) });
-    vi.advanceTimersByTime(BLINK_MS - 1);
     await wrapper.setProps({ session: session({ state: "waiting" }) });
-
-    // 前のタイマーが残っていると、ここで点滅が打ち切られてしまう。
-    vi.advanceTimersByTime(1);
-    await wrapper.vm.$nextTick();
     expect(wrapper.classes()).toContain("blink");
   });
 

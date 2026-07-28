@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from "vue";
+import { ref, watch } from "vue";
 import type { AgentState, Session } from "../../common/types";
-import { BLINK_MS } from "../blink";
 
 const props = defineProps<{ session: Session; selected: boolean }>();
 const emit = defineEmits<{ select: [id: string]; close: [id: string] }>();
@@ -10,28 +9,28 @@ const emit = defineEmits<{ select: [id: string]; close: [id: string] }>();
 const NOTABLE: AgentState[] = ["waiting", "done"];
 
 const blink = ref(false);
-let timer: ReturnType<typeof setTimeout> | undefined;
 
 /**
- * 別のターミナルを見ている間に状態が変わっても気づけるよう、数回だけ点滅させる。
+ * 別のターミナルを見ている間に状態が変わっても気づけるよう、クリックされるまで点滅させ続ける。
  * 監視するのは遷移であって状態そのものではないので、開いた時点で既に完了している行は点滅しない。
  */
 watch(
   () => props.session.state,
   (state) => {
     if (!NOTABLE.includes(state)) return;
-    clearTimeout(timer);
     blink.value = true;
-    timer = setTimeout(() => (blink.value = false), BLINK_MS);
   },
 );
 
-onUnmounted(() => clearTimeout(timer));
+const select = () => {
+  blink.value = false;
+  emit("select", props.session.id);
+};
 </script>
 
 <template>
   <li class="item" :class="[props.session.state, { selected: props.selected, blink }]">
-    <div class="body" data-test="session-body" @click="emit('select', props.session.id)">
+    <div class="body" data-test="session-body" @click="select">
       <div class="title-row">
         <span class="dot" :class="props.session.state" />
         <span class="title">{{ props.session.title }}</span>
@@ -107,16 +106,16 @@ onUnmounted(() => clearTimeout(timer));
 /*
  * 状態ごとにアニメーション名を分けてある。色を合わせるためだけでなく、done から waiting へ
  * 続けて動いたときに名前が変わって点滅がやり直されるため。
- * 回数と長さは src/blink.ts の BLINK_MS（600ms × 3）と揃えること。
+ * クリックされるまで止まらないよう infinite にしてあり、select() 内で blink を false に戻す。
  */
 .item.blink.waiting {
-  animation: blink-waiting 600ms ease-in-out 3;
+  animation: blink-waiting 600ms ease-in-out infinite;
 }
 .item.blink.done {
-  animation: blink-done 600ms ease-in-out 3;
+  animation: blink-done 600ms ease-in-out infinite;
 }
 .item.blink .dot {
-  animation: blink-dot 600ms ease-in-out 3;
+  animation: blink-dot 600ms ease-in-out infinite;
 }
 /* 背景ではなく内側の枠を光らせる。選択中の背景色と喧嘩しない。 */
 @keyframes blink-waiting {
