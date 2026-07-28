@@ -82,6 +82,34 @@ describe("SessionManager", () => {
     expect(manager.scrollback(session.id).length).toBeLessThanOrEqual(64);
   });
 
+  // スクロールバックは末尾しか残らないので、先頭にしか現れないモード設定は別に覚えておく。
+  // 覚えていないと、後から繋いだブラウザでマウス報告が無効なままになりスクロールバックが死ぬ。
+  it("PTY が設定した端末モードをスクロールバックとは別に覚える", async () => {
+    const manager = newManager();
+    const session = manager.create("/tmp");
+    manager.write(session.id, "printf '\\033[?1049h\\033[?1006h\\033[?1000h\\033[?1002h'\n");
+    await waitFor(() => manager.terminalModes(session.id).includes("\x1b[?1002h"));
+    expect(manager.terminalModes(session.id)).toContain("\x1b[?1049h");
+    expect(manager.terminalModes(session.id)).toContain("\x1b[?1006h");
+    expect(manager.terminalModes(session.id)).toContain("\x1b[?1000h");
+  });
+
+  it("端末モードはスクロールバックが上限で切り詰められても残る", async () => {
+    const manager = newManager({ scrollbackChars: 64 });
+    const session = manager.create("/tmp");
+    manager.write(session.id, "printf '\\033[?1002h'\n");
+    await waitFor(() => manager.terminalModes(session.id).includes("\x1b[?1002h"));
+    manager.write(session.id, "echo ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n");
+    await waitFor(() => manager.scrollback(session.id).includes("ZZZZ"));
+
+    expect(manager.scrollback(session.id)).not.toContain("\x1b[?1002h");
+    expect(manager.terminalModes(session.id)).toContain("\x1b[?1002h");
+  });
+
+  it("未知の id の端末モードは空文字列", () => {
+    expect(newManager().terminalModes("nope")).toBe("");
+  });
+
   it("onOutput の購読者に出力が流れる", async () => {
     const manager = newManager();
     const session = manager.create("/tmp");

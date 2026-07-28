@@ -49,8 +49,12 @@ server.on("upgrade", (req, socket, head) => {
 /** WebSocket と PTY を双方向につなぐ。 */
 const attach = (ws: WebSocket, sessionId: string) => {
   // 途中から接続したブラウザにも直前までの画面を見せる。
-  const scrollback = manager.scrollback(sessionId);
-  if (scrollback) ws.send(scrollback);
+  // スクロールバックは末尾しか残らず、tmux が attach 直後に一度だけ送る端末モード
+  // ——代替画面・bracketed paste・SGR マウス報告——は早々に切り捨てられる。
+  // 落ちたままだとホイールがマウスイベントとして tmux へ届かず、copy-mode に入れない。
+  // 画面を描き直す前に端末をその状態へ戻しておく。
+  const replay = manager.terminalModes(sessionId) + manager.scrollback(sessionId);
+  if (replay) ws.send(replay);
 
   const unsubscribeOutput = manager.onOutput(sessionId, (data) => {
     if (ws.readyState === ws.OPEN) ws.send(data);

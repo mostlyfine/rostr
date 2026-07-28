@@ -6,6 +6,7 @@ import type { IPty } from "node-pty";
 import type { HookEvent, Session } from "../common/types";
 import { applyHookEvent } from "./state";
 import type { Summarizer } from "./summary";
+import { createModeTracker, type ModeTracker } from "./terminalModes";
 import {
   DEFAULT_TMUX_SOCKET,
   buildAgentCommand,
@@ -44,6 +45,8 @@ interface Entry {
   /** tmux 経由なら attach しているクライアント、そうでなければエージェント本体。 */
   proc: IPty;
   scrollback: string;
+  /** スクロールバックの切り詰めで失われる端末モードを別に覚えておく。 */
+  modes: ModeTracker;
   listeners: Set<OutputListener>;
   /** tmux 経由のときだけ入る。 */
   tmuxName?: string;
@@ -206,6 +209,14 @@ export class SessionManager {
     return this.entries.get(id)?.scrollback ?? "";
   }
 
+  /**
+   * 今この PTY で有効な端末モードを再現するシーケンス。
+   * スクロールバックは末尾しか残らないため、先頭にしか現れないモード設定はここから補う。
+   */
+  terminalModes(id: string): string {
+    return this.entries.get(id)?.modes.replay() ?? "";
+  }
+
   /** PTY へ入力を送る。 */
   write(id: string, data: string): boolean {
     const entry = this.entries.get(id);
@@ -341,10 +352,18 @@ export class SessionManager {
 
   /** PTY を出力の配線ごと登録する。直接起動でも tmux クライアントでも扱いは同じ。 */
   private register(session: Session, proc: IPty, tmuxName?: string): void {
-    const entry: Entry = { session, proc, scrollback: "", listeners: new Set(), tmuxName };
+    const entry: Entry = {
+      session,
+      proc,
+      scrollback: "",
+      modes: createModeTracker(),
+      listeners: new Set(),
+      tmuxName,
+    };
     this.entries.set(session.id, entry);
 
     proc.onData((data) => {
+      entry.modes.feed(data);
       entry.scrollback = (entry.scrollback + data).slice(-this.scrollbackChars);
       for (const listener of entry.listeners) listener(data);
     });
