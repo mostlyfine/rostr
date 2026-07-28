@@ -13,6 +13,8 @@ const setup = () => {
     buildArgs: () => [],
     port: 0,
     scrollbackChars: 4096,
+    // API の形だけを見るテストなので、本番の tmux サーバへセッションを残さない。
+    tmux: false,
   });
   managers.push(manager);
   return { manager, app: createApp(manager) };
@@ -24,7 +26,12 @@ afterEach(() => {
 
 describe("静的ファイルの配信", () => {
   it("dist を渡すと index.html を配信する", async () => {
-    const manager = new SessionManager({ agentBin: "/bin/sh", buildArgs: () => [], port: 0 });
+    const manager = new SessionManager({
+      agentBin: "/bin/sh",
+      buildArgs: () => [],
+      port: 0,
+      tmux: false,
+    });
     managers.push(manager);
     const app = createApp(manager, resolve(import.meta.dirname, "../../dist"));
     const res = await request(app).get("/");

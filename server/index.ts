@@ -80,6 +80,9 @@ const attach = (ws: WebSocket, sessionId: string) => {
 
 const shutdown = () => {
   manager.disposeAll();
+  if (manager.tmuxEnabled) {
+    console.log("tmux セッションから切り離しました。エージェントは動き続けます。");
+  }
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1000).unref();
 };
@@ -87,6 +90,13 @@ const shutdown = () => {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
+// 前回のサーバが残した tmux セッションを拾い直してから待ち受ける。
+const recovered = manager.recover();
+if (recovered > 0) console.log(`tmux から ${recovered} 件のセッションを復元しました`);
+
 server.listen(port, () => {
-  console.log(`multi-agent server listening on http://127.0.0.1:${port} (agent: ${agentBin})`);
+  const tmuxState = manager.tmuxEnabled ? "on" : "off";
+  console.log(
+    `multi-agent server listening on http://127.0.0.1:${port} (agent: ${agentBin}, tmux: ${tmuxState})`,
+  );
 });
