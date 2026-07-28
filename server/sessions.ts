@@ -61,6 +61,16 @@ export const INHERITED_CLAUDE_ENV_KEYS = [
   "CLAUDE_PID",
 ];
 
+/**
+ * node --watch が子へ付ける印。これが付いた node の子は IPC で依存ファイルを親へ報告する。
+ * multi-agent を npm run dev（--watch）で動かしていると、エージェントの中で走る別の node
+ * ——vitest の forks プールなど、IPC で自前のプロトコルを喋るもの——にまで報告が混ざって壊れる。
+ */
+const WATCH_MODE_ENV_KEYS = ["WATCH_REPORT_DEPENDENCIES"];
+
+/** エージェントへ渡す前に落とす環境変数。tmux 経由でも直接起動でも同じものを落とす。 */
+export const STRIPPED_ENV_KEYS = [...INHERITED_CLAUDE_ENV_KEYS, ...WATCH_MODE_ENV_KEYS];
+
 /** tmux の中から multi-agent を起動していると、attach がネストを嫌って失敗する。 */
 const NESTED_TMUX_ENV_KEYS = ["TMUX", "TMUX_PANE"];
 
@@ -130,7 +140,7 @@ export class SessionManager {
           args: this.options.buildArgs(id),
           sessionId: id,
           port: this.options.port,
-          unsetKeys: INHERITED_CLAUDE_ENV_KEYS,
+          unsetKeys: STRIPPED_ENV_KEYS,
         }),
       });
       this.register(session, this.attach(name), name);
@@ -308,7 +318,7 @@ export class SessionManager {
    */
   private buildEnv(sessionId?: string): Record<string, string> {
     const env = { ...(process.env as Record<string, string>) };
-    for (const key of INHERITED_CLAUDE_ENV_KEYS) delete env[key];
+    for (const key of STRIPPED_ENV_KEYS) delete env[key];
     for (const key of NESTED_TMUX_ENV_KEYS) delete env[key];
     if (sessionId) {
       env.MA_SESSION_ID = sessionId;
