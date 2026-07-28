@@ -6,6 +6,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import type { ClientMessage } from "../../common/types";
 import { XTERM_THEMES } from "../theme";
+import { createTerminalOptions } from "../terminalOptions";
 import { useTheme } from "../composables/useTheme";
 
 const props = defineProps<{ sessionId: string; visible: boolean }>();
@@ -35,16 +36,7 @@ const fit = () => {
 };
 
 onMounted(() => {
-  term = new Terminal({
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, "Courier New", monospace',
-    fontSize: 13,
-    cursorBlink: true,
-    allowProposedApi: true,
-    // tmux 経由では代替画面なので効かない（履歴は tmux 側にある）。
-    // tmux が無い環境ではこれが唯一のスクロールバックになる。
-    scrollback: 10_000,
-    theme: XTERM_THEMES[resolvedTheme.value],
-  });
+  term = new Terminal(createTerminalOptions(resolvedTheme.value));
   fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
   term.loadAddon(new WebLinksAddon());
