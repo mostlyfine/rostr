@@ -23,6 +23,7 @@
     "build": "vue-tsc -b && vite build",
     "prepare": "npm run build",
     "server": "node --import tsx server/index.ts",
+    "stop": "pid=$(lsof -tiTCP:${PORT:-8787} -sTCP:LISTEN) && kill $pid && echo \"stopped rostr server (pid $pid)\" || echo \"no rostr server listening on port ${PORT:-8787}\"",
     "typecheck": "vue-tsc -b && tsc -p tsconfig.server.json",
     "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
     "tmux:kill": "tmux -L rostr kill-server 2>/dev/null || true",
