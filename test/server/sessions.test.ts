@@ -1,5 +1,7 @@
+import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionManager } from "../../server/sessions";
+import { isTmuxAvailable, tmuxSessionName } from "../../server/tmux";
 
 /** claude の代わりに sh を起動する。テストでは実際のエージェントは要らない。 */
 const managers: SessionManager[] = [];
@@ -10,6 +12,8 @@ const newManager = (opts: { buildArgs?: (id: string) => string[]; scrollbackChar
     buildArgs: opts.buildArgs ?? (() => []),
     port: 0,
     scrollbackChars: opts.scrollbackChars ?? 64,
+    // この describe は tmux を挟まない直接起動の経路を見る。
+    tmux: false,
   });
   managers.push(manager);
   return manager;
@@ -148,5 +152,113 @@ describe("SessionManager", () => {
     });
     const session = manager.create("/tmp");
     expect(seen).toEqual([session.id]);
+  });
+});
+
+/** 本番と混ざらないよう、テストは専用ソケットの tmux サーバを使う。 */
+const TEST_SOCKET = "multi-agent-test";
+
+const tmuxSessionNames = (): string[] => {
+  const result = spawnSync("tmux", ["-L", TEST_SOCKET, "list-sessions", "-F", "#{session_name}"], {
+    encoding: "utf8",
+  });
+  if (result.status !== 0 || typeof result.stdout !== "string") return [];
+  return result.stdout.split("\n").filter(Boolean);
+};
+
+describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
+  const newTmuxManager = () => {
+    const manager = new SessionManager({
+      agentBin: "/bin/sh",
+      buildArgs: () => [],
+      port: 0,
+      scrollbackChars: 8192,
+      tmux: true,
+      tmuxSocket: TEST_SOCKET,
+    });
+    managers.push(manager);
+    return manager;
+  };
+
+  afterEach(() => {
+    spawnSync("tmux", ["-L", TEST_SOCKET, "kill-server"], { stdio: "ignore" });
+  });
+
+  it("create すると tmux セッションが立つ", async () => {
+    const manager = newTmuxManager();
+    const session = manager.create(process.cwd());
+    await waitFor(() => tmuxSessionNames().includes(tmuxSessionName(session.id)));
+    expect(tmuxSessionNames()).toContain(tmuxSessionName(session.id));
+  });
+
+  it("tmux 越しでも入出力が通り、MA_SESSION_ID が渡る", async () => {
+    const manager = newTmuxManager();
+    const session = manager.create(process.cwd());
+    manager.write(session.id, 'echo "SID=${MA_SESSION_ID}"\n');
+    await waitFor(() => manager.scrollback(session.id).includes(`SID=${session.id}`));
+    expect(manager.scrollback(session.id)).toContain(`SID=${session.id}`);
+  });
+
+  it("disposeAll してもエージェントは生き残る", async () => {
+    const manager = newTmuxManager();
+    const session = manager.create(process.cwd());
+    await waitFor(() => tmuxSessionNames().includes(tmuxSessionName(session.id)));
+
+    manager.disposeAll();
+
+    expect(manager.list()).toEqual([]);
+    // サーバが落ちても tmux 側のプロセスは残る。これが永続化の本体。
+    expect(tmuxSessionNames()).toContain(tmuxSessionName(session.id));
+  });
+
+  it("recover で生き残ったセッションが一覧に戻る", async () => {
+    const first = newTmuxManager();
+    const created = first.create(process.cwd());
+    await waitFor(() => tmuxSessionNames().includes(tmuxSessionName(created.id)));
+    first.disposeAll();
+
+    const second = newTmuxManager();
+    second.recover();
+
+    const recovered = second.get(created.id);
+    expect(recovered?.cwd).toBe(process.cwd());
+    expect(recovered?.title).toBe(created.title);
+    // 状態は hook 由来なので復元時は idle に戻り、次のイベントで追いつく。
+    expect(recovered?.state).toBe("idle");
+  });
+
+  it("復元したセッションにも入力を流せる", async () => {
+    const first = newTmuxManager();
+    const created = first.create(process.cwd());
+    await waitFor(() => tmuxSessionNames().includes(tmuxSessionName(created.id)));
+    first.disposeAll();
+
+    const second = newTmuxManager();
+    second.recover();
+    second.write(created.id, "echo recovered-marker\n");
+    await waitFor(() => second.scrollback(created.id).includes("recovered-marker"));
+    expect(second.scrollback(created.id)).toContain("recovered-marker");
+  });
+
+  it("kill すると tmux セッションごと消える", async () => {
+    const manager = newTmuxManager();
+    const session = manager.create(process.cwd());
+    await waitFor(() => tmuxSessionNames().includes(tmuxSessionName(session.id)));
+
+    manager.kill(session.id);
+
+    await waitFor(() => !tmuxSessionNames().includes(tmuxSessionName(session.id)));
+    await waitFor(() => manager.list().length === 0);
+    expect(manager.get(session.id)).toBeUndefined();
+  });
+
+  it("recover は既に把握しているセッションを二重に登録しない", async () => {
+    const manager = newTmuxManager();
+    const session = manager.create(process.cwd());
+    await waitFor(() => tmuxSessionNames().includes(tmuxSessionName(session.id)));
+
+    manager.recover();
+
+    expect(manager.list().map((s) => s.id)).toEqual([session.id]);
   });
 });
