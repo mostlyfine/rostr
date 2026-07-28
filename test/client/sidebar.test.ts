@@ -26,12 +26,31 @@ describe("toSidebarRows", () => {
       session({ id: "c", state: "done" }),
     ]);
     expect(rows.map((row) => [row.kind, row.key])).toEqual([
-      ["header", "header:waiting"],
-      ["session", "b"],
       ["header", "header:done"],
       ["session", "a"],
       ["session", "c"],
+      ["header", "header:waiting"],
+      ["session", "b"],
     ]);
+  });
+
+  it("同じ状態の中では作成が古いものを上に置く", () => {
+    const rows = toSidebarRows([
+      session({ id: "new", createdAt: 300 }),
+      session({ id: "old", createdAt: 100 }),
+      session({ id: "mid", createdAt: 200 }),
+    ]);
+    expect(rows.filter((row) => row.kind === "session").map((row) => row.key)).toEqual([
+      "old",
+      "mid",
+      "new",
+    ]);
+  });
+
+  it("並べ替えても渡された配列は書き換えない", () => {
+    const sessions = [session({ id: "new", createdAt: 300 }), session({ id: "old", createdAt: 100 })];
+    toSidebarRows(sessions);
+    expect(sessions.map((s) => s.id)).toEqual(["new", "old"]);
   });
 
   it("見出しはラベルと件数を持つ", () => {
@@ -55,7 +74,7 @@ describe("toSidebarRows", () => {
 });
 
 describe("Sidebar", () => {
-  it("状態ごとにグループ分けして、要対応を先頭に置く", () => {
+  it("状態ごとにグループ分けして、完了・要対応・実行中の順に置く", () => {
     const wrapper = mount(Sidebar, {
       props: {
         sessions: [
@@ -67,7 +86,7 @@ describe("Sidebar", () => {
       },
     });
     const headings = wrapper.findAll("[data-test=group-label]").map((el) => el.text());
-    expect(headings).toEqual(["要対応", "実行中", "完了"]);
+    expect(headings).toEqual(["完了", "要対応", "実行中"]);
   });
 
   it("該当セッションが無い状態のグループは描画しない", () => {
