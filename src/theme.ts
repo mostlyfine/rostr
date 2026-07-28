@@ -2,39 +2,32 @@ import type { ITheme } from "@xterm/xterm";
 
 export const THEME_KEY = "rostr:theme";
 
-/** ユーザーが選んだもの。system は OS の設定に従う。 */
-export type ThemeChoice = "system" | "light" | "dark";
-/** system を解決した後の、実際に適用される見た目。 */
-export type ResolvedTheme = "light" | "dark";
+/** 適用される見た目。 */
+export type Theme = "light" | "dark";
 
-const CHOICES: ThemeChoice[] = ["system", "light", "dark"];
+const isTheme = (value: unknown): value is Theme => value === "light" || value === "dark";
 
-const isChoice = (value: unknown): value is ThemeChoice =>
-  CHOICES.includes(value as ThemeChoice);
-
-/** 保存されたテーマの選択を返す。未設定・未知の値はどちらも system に倒す。 */
-export const loadThemeChoice = (): ThemeChoice => {
+/** 保存されたテーマを返す。未設定・未知の値はどちらも既定の dark に倒す。 */
+export const loadTheme = (): Theme => {
   try {
     const raw = localStorage.getItem(THEME_KEY);
-    return isChoice(raw) ? raw : "system";
+    return isTheme(raw) ? raw : "dark";
   } catch {
-    return "system";
+    return "dark";
   }
 };
 
-/** テーマの選択を保存する。system は既定なので、値を残さず消す。 */
-export const saveThemeChoice = (choice: ThemeChoice): void => {
+/** テーマを保存する。 */
+export const saveTheme = (theme: Theme): void => {
   try {
-    if (choice === "system") localStorage.removeItem(THEME_KEY);
-    else localStorage.setItem(THEME_KEY, choice);
+    localStorage.setItem(THEME_KEY, theme);
   } catch {
     // プライベートモード等で書けなくても、その回の表示は続けられるので黙って諦める。
   }
 };
 
-/** トグルを押したときの次の選択。system → light → dark → system と巡回する。 */
-export const nextThemeChoice = (choice: ThemeChoice): ThemeChoice =>
-  CHOICES[(CHOICES.indexOf(choice) + 1) % CHOICES.length];
+/** トグルを押したときの次のテーマ。dark と light を往復する。 */
+export const nextTheme = (theme: Theme): Theme => (theme === "dark" ? "light" : "dark");
 
 /**
  * xterm は Canvas に描くので CSS 変数を読めない。ここだけ style.css と同じ Catppuccin の
@@ -43,7 +36,7 @@ export const nextThemeChoice = (choice: ThemeChoice): ThemeChoice =>
  * ANSI 16 色は catppuccin/palette の ansiColors、cursor は nvim の Cursor に倣って
  * rosewater、selectionBackground は Visual に倣って surface1。
  */
-export const XTERM_THEMES: Record<ResolvedTheme, ITheme> = {
+export const XTERM_THEMES: Record<Theme, ITheme> = {
   // Catppuccin Macchiato
   dark: {
     background: "#24273a",

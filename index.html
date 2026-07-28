@@ -11,11 +11,8 @@
     <script>
       (function () {
         try {
-          var choice = localStorage.getItem("rostr:theme");
-          if (choice !== "light" && choice !== "dark") {
-            choice = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-          }
-          document.documentElement.dataset.theme = choice;
+          document.documentElement.dataset.theme =
+            localStorage.getItem("rostr:theme") === "light" ? "light" : "dark";
         } catch (e) {
           document.documentElement.dataset.theme = "dark";
         }

@@ -12,7 +12,7 @@ import { useTheme } from "../composables/useTheme";
 
 const props = defineProps<{ sessionId: string; visible: boolean }>();
 
-const { resolved: resolvedTheme } = useTheme();
+const { theme: currentTheme } = useTheme();
 
 const host = ref<HTMLDivElement | null>(null);
 let term: Terminal | null = null;
@@ -37,7 +37,7 @@ const fit = () => {
 };
 
 onMounted(() => {
-  term = new Terminal(createTerminalOptions(resolvedTheme.value));
+  term = new Terminal(createTerminalOptions(currentTheme.value));
   fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
   term.loadAddon(new WebLinksAddon());
@@ -83,7 +83,7 @@ watch(
 );
 
 // xterm は Canvas 描画で CSS 変数を追えないので、切り替えのたびに theme を差し替える。
-watch(resolvedTheme, (theme) => {
+watch(currentTheme, (theme) => {
   if (term) term.options.theme = XTERM_THEMES[theme];
 });
 
