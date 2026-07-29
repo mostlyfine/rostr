@@ -55,7 +55,7 @@ const { label: themeLabel, toggle: toggleTheme } = useTheme();
 
 <style scoped>
 .sidebar {
-  width: 280px;
+  width: 320px;
   flex: none;
   display: flex;
   flex-direction: column;
@@ -71,7 +71,7 @@ const { label: themeLabel, toggle: toggleTheme } = useTheme();
 }
 h1 {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-strong);
 }
 .actions {
@@ -84,7 +84,7 @@ h1 {
   border: 1px solid var(--border-control);
   background: var(--bg-control);
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   padding: 4px 10px;
   border-radius: 5px;
   cursor: pointer;
@@ -105,7 +105,7 @@ h1 {
 }
 .empty {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   padding: 8px;
 }
@@ -114,7 +114,7 @@ h1 {
   align-items: center;
   gap: 6px;
   padding: 2px 4px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-tertiary);
@@ -127,7 +127,7 @@ h1 {
   color: var(--text-secondary);
   border-radius: 8px;
   padding: 0 6px;
-  font-size: 10px;
+  font-size: 11px;
 }
 .rows {
   list-style: none;
