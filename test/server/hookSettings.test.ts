@@ -32,14 +32,35 @@ describe("buildHookSettings", () => {
 });
 
 describe("writeHookSettings", () => {
-  it("セッションごとのファイルに JSON を書き出す", () => {
-    const path = writeHookSettings("test-session-id", "/abs/hook-notify.mjs");
+  it("JSON を書き出してパスを返す", () => {
+    const path = writeHookSettings("/abs/hook-notify.mjs");
     try {
-      expect(path).toContain("test-session-id");
       const parsed = JSON.parse(readFileSync(path, "utf8"));
       expect(parsed.hooks.UserPromptSubmit).toBeDefined();
     } finally {
       rmSync(path, { force: true });
+    }
+  });
+
+  // 内容は notifyScriptPath にしか依存しない。セッションごとに増やすとファイルが溜まり続ける。
+  it("同じ notifyScriptPath なら同じパスを返す", () => {
+    const path = writeHookSettings("/abs/hook-notify.mjs");
+    try {
+      expect(writeHookSettings("/abs/hook-notify.mjs")).toBe(path);
+    } finally {
+      rmSync(path, { force: true });
+    }
+  });
+
+  // 別の worktree で動く rostr と tmpdir を共有しても上書きし合わない。
+  it("notifyScriptPath が違えば別のパスになる", () => {
+    const a = writeHookSettings("/abs/one/hook-notify.mjs");
+    const b = writeHookSettings("/abs/two/hook-notify.mjs");
+    try {
+      expect(a).not.toBe(b);
+    } finally {
+      rmSync(a, { force: true });
+      rmSync(b, { force: true });
     }
   });
 });

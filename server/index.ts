@@ -16,6 +16,9 @@ const port = Number(process.env.PORT ?? 8787);
 const agentBin = process.env.CLAUDE_BIN ?? "claude";
 const { summarizer, model: summaryModel } = createSummarizerFromEnv(agentBin);
 
+// 中身はセッションに依らないので、起動時に一度書き出したものを全セッションで使い回す。
+const hookSettingsPath = writeHookSettings(notifyScriptPath);
+
 const manager = new SessionManager({
   agentBin,
   buildArgs: (sessionId) => [
@@ -23,7 +26,7 @@ const manager = new SessionManager({
     sessionId,
     // ユーザー自身の設定は残したまま、状態通知用の hook だけを追加で読ませる。
     "--settings",
-    writeHookSettings(sessionId, notifyScriptPath),
+    hookSettingsPath,
   ],
   port,
   summarizer,

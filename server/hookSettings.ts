@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { execPath } from "node:process";
 import { HOOKED_EVENTS, type HookedEvent } from "../common/types";
 import { writeSettingsFile } from "./settingsDir";
@@ -33,6 +34,15 @@ export const buildHookSettings = (notifyScriptPath: string): HookSettings => {
   return { hooks };
 };
 
-/** 設定を一時ファイルへ書き出し、そのパスを返す。 */
-export const writeHookSettings = (sessionId: string, notifyScriptPath: string): string =>
-  writeSettingsFile(`${sessionId}.json`, JSON.stringify(buildHookSettings(notifyScriptPath), null, 2));
+/**
+ * 設定を一時ファイルへ書き出し、そのパスを返す。
+ * 内容は notifyScriptPath にしか依存しないので、ファイル名もそこから決める。セッションごとに
+ * 分けると一時ディレクトリに増え続け、別の worktree で動く rostr と共有していても壊れない。
+ */
+export const writeHookSettings = (notifyScriptPath: string): string => {
+  const digest = createHash("sha256").update(notifyScriptPath).digest("hex").slice(0, 12);
+  return writeSettingsFile(
+    `hooks-${digest}.json`,
+    JSON.stringify(buildHookSettings(notifyScriptPath), null, 2),
+  );
+};
