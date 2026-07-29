@@ -77,7 +77,11 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  /* Catppuccin Latte */
+  /*
+   * Catppuccin Latte。ただし yellow と blue は公式パレット（#df8e1d, #1e66f5）より
+   * 明度を落としてある。状態インジケータ（--state-waiting/--state-working）の背景に
+   * 対するコントラスト比が低すぎたため（例: yellow は --bg-sidebar に対し 2.15:1）。
+   */
   --ctp-rosewater: #dc8a78;
   --ctp-flamingo: #dd7878;
   --ctp-pink: #ea76cb;
@@ -85,12 +89,12 @@
   --ctp-red: #d20f39;
   --ctp-maroon: #e64553;
   --ctp-peach: #fe640b;
-  --ctp-yellow: #df8e1d;
+  --ctp-yellow: #9e6515;
   --ctp-green: #40a02b;
   --ctp-teal: #179299;
   --ctp-sky: #04a5e5;
   --ctp-sapphire: #209fb5;
-  --ctp-blue: #1e66f5;
+  --ctp-blue: #0a50dc;
   --ctp-lavender: #7287fd;
   --ctp-text: #4c4f69;
   --ctp-subtext1: #5c5f77;
