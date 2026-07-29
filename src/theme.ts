@@ -33,6 +33,16 @@ const CUBE_LEVELS = [0, 95, 135, 175, 215, 255];
 const toHex = (r: number, g: number, b: number) =>
   `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 
+/** グレースケール域 232〜255 の色。8 から max まで等間隔に上がる。標準の上限は 238。 */
+const GRAYSCALE_START = 232;
+const GRAYSCALE_END = 255;
+const GRAYSCALE_STANDARD_MAX = 238;
+const grayscale = (i: number, max: number): string => {
+  const t = (i - GRAYSCALE_START) / (GRAYSCALE_END - GRAYSCALE_START);
+  const v = Math.round(8 + t * (max - 8));
+  return toHex(v, v, v);
+};
+
 /**
  * xterm 標準の 256 色パレット（16〜255）を計算し、overrides で指定した番号だけ差し替える。
  * claude CLI 自身が Markdown のインラインコードなどに 256 色（例: 153）を直接指定してくる
@@ -48,8 +58,7 @@ const buildExtendedAnsi = (overrides: Record<number, string>): string[] => {
       const n = i - 16;
       colors.push(toHex(CUBE_LEVELS[Math.floor(n / 36) % 6], CUBE_LEVELS[Math.floor(n / 6) % 6], CUBE_LEVELS[n % 6]));
     } else {
-      const v = 8 + (i - 232) * 10;
-      colors.push(toHex(v, v, v));
+      colors.push(grayscale(i, GRAYSCALE_STANDARD_MAX));
     }
   }
   return colors;
@@ -65,10 +74,8 @@ const buildExtendedAnsi = (overrides: Record<number, string>): string[] => {
 const LIGHT_GRAYSCALE_MAX = 128;
 const buildLightGrayscaleOverrides = (): Record<number, string> => {
   const overrides: Record<number, string> = { 231: toHex(LIGHT_GRAYSCALE_MAX, LIGHT_GRAYSCALE_MAX, LIGHT_GRAYSCALE_MAX) };
-  for (let i = 232; i <= 255; i++) {
-    const t = (i - 232) / (255 - 232);
-    const v = Math.round(8 + t * (LIGHT_GRAYSCALE_MAX - 8));
-    overrides[i] = toHex(v, v, v);
+  for (let i = GRAYSCALE_START; i <= GRAYSCALE_END; i++) {
+    overrides[i] = grayscale(i, LIGHT_GRAYSCALE_MAX);
   }
   return overrides;
 };
