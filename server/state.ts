@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 import type { HookEvent, Session } from "../common/types";
-import { oneLine, truncate } from "./text";
+import { isSyntheticUserPrompt, oneLine, truncate } from "./text";
 
 const PROMPT_MAX = 140;
 const ACTIVITY_MAX = 100;
@@ -55,9 +55,9 @@ export const applyHookEvent = (session: Session, event: HookEvent): Partial<Sess
       return { state: "idle", prompt: "", activity: "", summary: "" };
     case "UserPromptSubmit": {
       const prompt = event.prompt ?? "";
-      // バックグラウンドタスク完了通知が次のターンとして自動挿入された場合もこのイベントが
-      // 発火する。ユーザーの実入力ではないので、サイドバーの表示は書き換えない。
-      if (prompt.includes("<task-notification")) return {};
+      // バックグラウンドタスク完了通知やスラッシュコマンドの展開が次のターンとして自動挿入
+      // された場合もこのイベントが発火する。ユーザーの実入力ではないので表示は書き換えない。
+      if (isSyntheticUserPrompt(prompt)) return {};
       return {
         state: "working",
         prompt: truncateOneLine(prompt),

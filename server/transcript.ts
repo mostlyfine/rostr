@@ -4,15 +4,12 @@
  * 思考ブロック、添付やモード変更のような付随レコードは落とす。
  */
 
-import { oneLine } from "./text";
+import { isSyntheticUserPrompt, oneLine } from "./text";
 
 export interface ConversationTurn {
   role: "user" | "assistant";
   text: string;
 }
-
-/** 人の入力ではない、機械が差し込んだ疑似ユーザー入力の印。 */
-const SYNTHETIC_USER_MARKERS = ["<task-notification", "<command-name>", "<local-command-stdout>"];
 
 interface RawRecord {
   type?: unknown;
@@ -47,7 +44,7 @@ const toTurn = (record: RawRecord): ConversationTurn | undefined => {
     if (typeof content !== "string") return undefined;
     const text = oneLine(content);
     if (text === "") return undefined;
-    if (SYNTHETIC_USER_MARKERS.some((marker) => text.includes(marker))) return undefined;
+    if (isSyntheticUserPrompt(text)) return undefined;
     return { role: "user", text };
   }
 

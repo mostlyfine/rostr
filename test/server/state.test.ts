@@ -145,6 +145,23 @@ describe("applyHookEvent", () => {
     );
     expect(patch).toEqual({});
   });
+
+  // 判定は要約側（transcript.ts）と同じ SYNTHETIC_USER_MARKERS を使う。
+  it("スラッシュコマンド由来のprompt(command-name)も無視する", () => {
+    const patch = applyHookEvent(
+      { ...base, state: "working", prompt: "元のプロンプト" },
+      { hook_event_name: "UserPromptSubmit", prompt: "<command-name>/clear</command-name>" },
+    );
+    expect(patch).toEqual({});
+  });
+
+  it("ローカルコマンドの出力(local-command-stdout)も無視する", () => {
+    const patch = applyHookEvent(
+      { ...base, state: "working", prompt: "元のプロンプト" },
+      { hook_event_name: "UserPromptSubmit", prompt: "<local-command-stdout>done</local-command-stdout>" },
+    );
+    expect(patch).toEqual({});
+  });
 });
 
 describe("applyHookEvent の summary", () => {
