@@ -7,6 +7,7 @@ import { createApp } from "./app";
 import { writeHookSettings } from "./hookSettings";
 import { SessionManager } from "./sessions";
 import { createSummarizerFromEnv } from "./summary";
+import { SHELL_TMUX_PREFIX } from "./tmux";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const notifyScriptPath = join(here, "hook-notify.mjs");
@@ -28,7 +29,25 @@ const manager = new SessionManager({
   summarizer,
 });
 
-const app = createApp(manager, join(here, "..", "dist"));
+/**
+ * スプリットで開くシェル。エージェントと同じ仕組みで動かし、起動するバイナリと
+ * tmux セッション名の前置きだけを差し替える。id は親エージェントと共有する。
+ */
+const shells = new SessionManager({
+  agentBin: process.env.ROSTR_SHELL ?? process.env.SHELL ?? "/bin/bash",
+  buildArgs: () => [],
+  port,
+  tmuxPrefix: SHELL_TMUX_PREFIX,
+});
+
+// エージェントが終わったら、その脇で開いていたシェルも畳む。
+manager.onChange(() => {
+  for (const shell of shells.list()) {
+    if (!manager.get(shell.id)) shells.kill(shell.id);
+  }
+});
+
+const app = createApp(manager, shells, join(here, "..", "dist"));
 const server = createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
@@ -39,30 +58,32 @@ server.on("upgrade", (req, socket, head) => {
     return;
   }
   const sessionId = url.searchParams.get("session");
-  if (!sessionId || !manager.get(sessionId)) {
+  // スプリットで開いたシェルは同じ id を別の管理者が持つので、kind で振り分ける。
+  const target = url.searchParams.get("kind") === "shell" ? shells : manager;
+  if (!sessionId || !target.get(sessionId)) {
     socket.destroy();
     return;
   }
-  wss.handleUpgrade(req, socket, head, (ws) => attach(ws, sessionId));
+  wss.handleUpgrade(req, socket, head, (ws) => attach(ws, target, sessionId));
 });
 
 /** WebSocket と PTY を双方向につなぐ。 */
-const attach = (ws: WebSocket, sessionId: string) => {
+const attach = (ws: WebSocket, target: SessionManager, sessionId: string) => {
   // 途中から接続したブラウザにも直前までの画面を見せる。
   // スクロールバックは末尾しか残らず、tmux が attach 直後に一度だけ送る端末モード
   // ——代替画面・bracketed paste・SGR マウス報告——は早々に切り捨てられる。
   // 落ちたままだと画面が壊れ、ブラウザは tmux がマウスを欲しがっていることも知れずに
   // ホイールを送らなくなる。画面を描き直す前に端末をその状態へ戻しておく。
-  const replay = manager.terminalModes(sessionId) + manager.scrollback(sessionId);
+  const replay = target.terminalModes(sessionId) + target.scrollback(sessionId);
   if (replay) ws.send(replay);
 
-  const unsubscribeOutput = manager.onOutput(sessionId, (data) => {
+  const unsubscribeOutput = target.onOutput(sessionId, (data) => {
     if (ws.readyState === ws.OPEN) ws.send(data);
   });
 
   // セッションが消えたら接続も閉じる。
-  const unsubscribeChange = manager.onChange(() => {
-    if (!manager.get(sessionId)) ws.close();
+  const unsubscribeChange = target.onChange(() => {
+    if (!target.get(sessionId)) ws.close();
   });
 
   ws.on("message", (raw) => {
@@ -73,9 +94,9 @@ const attach = (ws: WebSocket, sessionId: string) => {
       return;
     }
     if (message.type === "input") {
-      manager.write(sessionId, message.data);
+      target.write(sessionId, message.data);
     } else if (message.type === "resize") {
-      manager.resize(sessionId, message.cols, message.rows);
+      target.resize(sessionId, message.cols, message.rows);
     }
   });
 
@@ -87,6 +108,7 @@ const attach = (ws: WebSocket, sessionId: string) => {
 
 const shutdown = () => {
   manager.disposeAll();
+  shells.disposeAll();
   if (manager.tmuxEnabled) {
     console.log("tmux セッションから切り離しました。エージェントは動き続けます。");
   }
@@ -100,6 +122,10 @@ process.on("SIGTERM", shutdown);
 // 前回のサーバが残した tmux セッションを拾い直してから待ち受ける。
 const recovered = manager.recover();
 if (recovered > 0) console.log(`tmux から ${recovered} 件のセッションを復元しました`);
+
+// 脇に開いていたシェルも同じく拾い直す。id が親と同じなので対応づけはそれだけで済む。
+const recoveredShells = shells.recover();
+if (recoveredShells > 0) console.log(`tmux から ${recoveredShells} 件のシェルを復元しました`);
 
 server.listen(port, () => {
   const tmuxState = manager.tmuxEnabled ? "on" : "off";

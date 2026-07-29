@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, rmSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
+  AGENT_TMUX_PREFIX,
+  SHELL_TMUX_PREFIX,
   buildAgentCommand,
   buildAttachArgs,
   buildKillArgs,
@@ -30,6 +32,48 @@ describe("tmuxSessionName / sessionIdFromName", () => {
     expect(sessionIdFromName("my-work")).toBeUndefined();
     expect(sessionIdFromName("rostr-")).toBeUndefined();
     expect(sessionIdFromName("")).toBeUndefined();
+  });
+});
+
+/**
+ * エージェントとシェルは同じ id を共有する（シェルの id = 親エージェントの id）ので、
+ * 区別は tmux セッション名の前置きだけが担う。互いの名前を取り違えると、
+ * 復元時にシェルがエージェントとして一覧に並ぶ。
+ */
+describe("エージェントとシェルの前置き", () => {
+  const id = "0f0b8a3c-1111-2222-3333-444455556666";
+
+  it("前置きを指定すると別の名前空間になる", () => {
+    expect(tmuxSessionName(id, SHELL_TMUX_PREFIX)).toBe(`${SHELL_TMUX_PREFIX}${id}`);
+    expect(tmuxSessionName(id, SHELL_TMUX_PREFIX)).not.toBe(tmuxSessionName(id));
+  });
+
+  it("シェルの名前も tmux が嫌う . と : を含まない", () => {
+    expect(tmuxSessionName(id, SHELL_TMUX_PREFIX)).not.toMatch(/[.:]/);
+  });
+
+  it("シェルの名前はエージェントの前置きでは始まらない", () => {
+    expect(SHELL_TMUX_PREFIX.startsWith(AGENT_TMUX_PREFIX)).toBe(false);
+    expect(AGENT_TMUX_PREFIX.startsWith(SHELL_TMUX_PREFIX)).toBe(false);
+  });
+
+  it("互いの名前からは id を取り出さない", () => {
+    const shellName = tmuxSessionName(id, SHELL_TMUX_PREFIX);
+    expect(sessionIdFromName(shellName)).toBeUndefined();
+    expect(sessionIdFromName(shellName, SHELL_TMUX_PREFIX)).toBe(id);
+    expect(sessionIdFromName(tmuxSessionName(id), SHELL_TMUX_PREFIX)).toBeUndefined();
+  });
+
+  it("一覧も前置きで振り分ける", () => {
+    const stdout = [
+      `${AGENT_TMUX_PREFIX}abc\t/work\t1700000000`,
+      `${SHELL_TMUX_PREFIX}abc\t/work\t1700000001`,
+      "",
+    ].join("\n");
+    expect(parseListSessions(stdout).map((s) => s.id)).toEqual(["abc"]);
+    expect(parseListSessions(stdout, SHELL_TMUX_PREFIX).map((s) => s.id)).toEqual(["abc"]);
+    expect(parseListSessions(stdout)[0].createdAt).toBe(1_700_000_000_000);
+    expect(parseListSessions(stdout, SHELL_TMUX_PREFIX)[0].createdAt).toBe(1_700_000_001_000);
   });
 });
 

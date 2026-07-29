@@ -7,7 +7,7 @@ import { SessionManager } from "../../server/sessions";
 
 const managers: SessionManager[] = [];
 
-const setup = () => {
+const newManager = () => {
   const manager = new SessionManager({
     agentBin: "/bin/sh",
     buildArgs: () => [],
@@ -17,7 +17,21 @@ const setup = () => {
     tmux: false,
   });
   managers.push(manager);
-  return { manager, app: createApp(manager) };
+  return manager;
+};
+
+const setup = () => {
+  const manager = newManager();
+  const shells = newManager();
+  return { manager, shells, app: createApp(manager, shells) };
+};
+
+const waitFor = async (predicate: () => boolean, timeoutMs = 5000) => {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) throw new Error("waitFor timed out");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
 };
 
 afterEach(() => {
@@ -26,14 +40,7 @@ afterEach(() => {
 
 describe("静的ファイルの配信", () => {
   it("dist を渡すと index.html を配信する", async () => {
-    const manager = new SessionManager({
-      agentBin: "/bin/sh",
-      buildArgs: () => [],
-      port: 0,
-      tmux: false,
-    });
-    managers.push(manager);
-    const app = createApp(manager, resolve(import.meta.dirname, "../../dist"));
+    const app = createApp(newManager(), newManager(), resolve(import.meta.dirname, "../../dist"));
     const res = await request(app).get("/");
     expect(res.status).toBe(200);
     expect(res.text).toContain("<div id=\"app\">");
@@ -52,6 +59,13 @@ describe("GET /api/sessions", () => {
     const res = await request(app).get("/api/sessions");
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
+  });
+
+  it("シェルを開いていなければ shell は false", async () => {
+    const { app } = setup();
+    await request(app).post("/api/sessions").send({ cwd: "/tmp" });
+    const res = await request(app).get("/api/sessions");
+    expect(res.body[0].shell).toBe(false);
   });
 });
 
@@ -91,6 +105,68 @@ describe("DELETE /api/sessions/:id", () => {
   it("未知の id なら 404", async () => {
     const { app } = setup();
     const res = await request(app).delete("/api/sessions/unknown");
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("/api/sessions/:id/shell", () => {
+  const createSession = async (app: ReturnType<typeof setup>["app"]) => {
+    const res = await request(app).post("/api/sessions").send({ cwd: "/tmp" });
+    return res.body.id as string;
+  };
+
+  it("親と同じ id・同じ cwd でシェルを起動する", async () => {
+    const { app, shells } = setup();
+    const id = await createSession(app);
+
+    const res = await request(app).post(`/api/sessions/${id}/shell`);
+
+    expect(res.status).toBe(201);
+    expect(shells.get(id)?.cwd).toBe("/tmp");
+  });
+
+  it("シェルを開くと一覧の shell が true になる", async () => {
+    const { app } = setup();
+    const id = await createSession(app);
+    await request(app).post(`/api/sessions/${id}/shell`);
+    const res = await request(app).get("/api/sessions");
+    expect(res.body[0].shell).toBe(true);
+  });
+
+  it("既に開いていれば二重に起動せず 204", async () => {
+    const { app, shells } = setup();
+    const id = await createSession(app);
+    await request(app).post(`/api/sessions/${id}/shell`);
+
+    const res = await request(app).post(`/api/sessions/${id}/shell`);
+
+    expect(res.status).toBe(204);
+    expect(shells.list()).toHaveLength(1);
+  });
+
+  it("親セッションが無ければ 404", async () => {
+    const { app } = setup();
+    const res = await request(app).post("/api/sessions/unknown/shell");
+    expect(res.status).toBe(404);
+  });
+
+  it("DELETE でシェルを終了する", async () => {
+    const { app, shells } = setup();
+    const id = await createSession(app);
+    await request(app).post(`/api/sessions/${id}/shell`);
+
+    const res = await request(app).delete(`/api/sessions/${id}/shell`);
+
+    expect(res.status).toBe(204);
+    // 一覧から消えるのはプロセスが終わってから。
+    await waitFor(() => shells.get(id) === undefined);
+    expect(shells.list()).toEqual([]);
+  });
+
+  it("開いていないシェルの DELETE は 404", async () => {
+    const { app } = setup();
+    const id = await createSession(app);
+    const res = await request(app).delete(`/api/sessions/${id}/shell`);
     expect(res.status).toBe(404);
   });
 });
@@ -149,6 +225,47 @@ describe("GET /api/events", () => {
       manager.create("/tmp");
       const frames = await readUntilFrames(2);
       expect(frames[1]).toHaveLength(2);
+    } finally {
+      controller.abort();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it("シェルを開いても配り直す", async () => {
+    const { app, manager, shells } = setup();
+    const session = manager.create("/tmp");
+
+    const server = app.listen(0);
+    await new Promise((resolve) => server.once("listening", resolve));
+    const port = (server.address() as AddressInfo).port;
+    const controller = new AbortController();
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/api/events`, {
+        signal: controller.signal,
+      });
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      const readUntilFrames = async (count: number) => {
+        while (buffer.split("\n\n").length - 1 < count) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+        }
+        return buffer
+          .split("\n\n")
+          .filter((frame) => frame.startsWith("data: "))
+          .map((frame) => JSON.parse(frame.slice("data: ".length)));
+      };
+
+      const [first] = await readUntilFrames(1);
+      expect(first[0].shell).toBe(false);
+
+      shells.create("/tmp", session.id);
+      const frames = await readUntilFrames(2);
+      expect(frames[1][0].shell).toBe(true);
     } finally {
       controller.abort();
       await new Promise((resolve) => server.close(resolve));

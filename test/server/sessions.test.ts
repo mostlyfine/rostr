@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionManager } from "../../server/sessions";
 import type { Summarizer } from "../../server/summary";
-import { isTmuxAvailable, tmuxSessionName } from "../../server/tmux";
+import { SHELL_TMUX_PREFIX, isTmuxAvailable, tmuxSessionName } from "../../server/tmux";
 
 /** claude の代わりに sh を起動する。テストでは実際のエージェントは要らない。 */
 const managers: SessionManager[] = [];
@@ -63,6 +63,20 @@ describe("SessionManager", () => {
   it("存在しないディレクトリは拒否する", () => {
     const manager = newManager();
     expect(() => manager.create("/no/such/dir/at/all")).toThrow(/ディレクトリ/);
+  });
+
+  // シェル用のマネージャは親エージェントと同じ id で登録し、対応づけを id だけで済ませる。
+  it("id を渡すとその id で登録する", () => {
+    const manager = newManager();
+    const session = manager.create("/tmp", "given-id");
+    expect(session.id).toBe("given-id");
+    expect(manager.get("given-id")).toBeDefined();
+  });
+
+  it("同じ id を二度作ろうとしたら拒否する", () => {
+    const manager = newManager();
+    manager.create("/tmp", "given-id");
+    expect(() => manager.create("/tmp", "given-id")).toThrow(/既に/);
   });
 
   it("PTY の出力をスクロールバックに溜める", async () => {
@@ -337,6 +351,65 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
     manager.recover();
 
     expect(manager.list().map((s) => s.id)).toEqual([session.id]);
+  });
+
+  /** シェル用のマネージャは前置きだけを変えた同じ仕組み。互いの tmux セッションを拾わない。 */
+  describe("tmuxPrefix でシェル用に分ける", () => {
+    const newShellManager = () => {
+      const manager = new SessionManager({
+        agentBin: "/bin/sh",
+        buildArgs: () => [],
+        port: 0,
+        scrollbackChars: 8192,
+        tmux: true,
+        tmuxSocket: TEST_SOCKET,
+        tmuxPrefix: SHELL_TMUX_PREFIX,
+      });
+      managers.push(manager);
+      return manager;
+    };
+
+    it("シェル用の前置きで tmux セッションが立つ", async () => {
+      const shells = newShellManager();
+      const session = shells.create(process.cwd(), "shared-id");
+      const name = tmuxSessionName(session.id, SHELL_TMUX_PREFIX);
+      await waitFor(() => tmuxSessionNames().includes(name));
+      expect(tmuxSessionNames()).toContain(name);
+    });
+
+    it("エージェントとシェルが同じ id で共存でき、互いを recover で拾わない", async () => {
+      const agents = newTmuxManager();
+      const shells = newShellManager();
+      const agent = agents.create(process.cwd());
+      shells.create(process.cwd(), agent.id);
+      await waitFor(() => tmuxSessionNames().length === 2);
+
+      agents.disposeAll();
+      shells.disposeAll();
+
+      const recoveredAgents = newTmuxManager();
+      const recoveredShells = newShellManager();
+      recoveredAgents.recover();
+      recoveredShells.recover();
+
+      expect(recoveredAgents.list().map((s) => s.id)).toEqual([agent.id]);
+      expect(recoveredShells.list().map((s) => s.id)).toEqual([agent.id]);
+    });
+
+    it("kill するのは自分の前置きの tmux セッションだけ", async () => {
+      const agents = newTmuxManager();
+      const shells = newShellManager();
+      const agent = agents.create(process.cwd());
+      shells.create(process.cwd(), agent.id);
+      await waitFor(() => tmuxSessionNames().length === 2);
+
+      shells.kill(agent.id);
+
+      await waitFor(
+        () => !tmuxSessionNames().includes(tmuxSessionName(agent.id, SHELL_TMUX_PREFIX)),
+      );
+      expect(tmuxSessionNames()).toContain(tmuxSessionName(agent.id));
+    });
   });
 });
 

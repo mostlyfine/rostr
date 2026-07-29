@@ -8,6 +8,7 @@ import { applyHookEvent } from "./state";
 import type { Summarizer } from "./summary";
 import { createModeTracker, type ModeTracker } from "./terminalModes";
 import {
+  AGENT_TMUX_PREFIX,
   DEFAULT_TMUX_SOCKET,
   buildAgentCommand,
   buildAttachArgs,
@@ -33,6 +34,8 @@ export interface SessionManagerOptions {
   tmux?: boolean;
   /** tmux のソケット名。テストでは本番と分けるために差し替える。 */
   tmuxSocket?: string;
+  /** tmux セッション名の前置き。シェル用のマネージャはここを変えて名前空間を分ける。 */
+  tmuxPrefix?: string;
   /** 要約の生成先。渡さなければ要約は作られない。 */
   summarizer?: Summarizer;
 }
@@ -107,6 +110,7 @@ export class SessionManager {
   private readonly scrollbackChars: number;
   private readonly useTmux: boolean;
   private readonly tmuxSocket: string;
+  private readonly tmuxPrefix: string;
   private tmuxConfPath?: string;
   private tmuxConfLoaded = false;
 
@@ -114,6 +118,7 @@ export class SessionManager {
     this.scrollbackChars = options.scrollbackChars ?? DEFAULT_SCROLLBACK_CHARS;
     this.useTmux = options.tmux ?? isTmuxAvailable();
     this.tmuxSocket = options.tmuxSocket ?? DEFAULT_TMUX_SOCKET;
+    this.tmuxPrefix = options.tmuxPrefix ?? AGENT_TMUX_PREFIX;
   }
 
   /** tmux 経由で起動しているか。起動ログの表示に使う。 */
@@ -121,8 +126,13 @@ export class SessionManager {
     return this.useTmux;
   }
 
-  /** 指定ディレクトリでエージェントを起動する。 */
-  create(cwd: string): Session {
+  /**
+   * 指定ディレクトリでエージェントを起動する。
+   * id を渡すとそれを使う。シェル用のマネージャが親エージェントと同じ id で登録するための口。
+   */
+  create(cwd: string, id: string = randomUUID()): Session {
+    if (this.entries.has(id)) throw new Error(`セッションは既に存在します: ${id}`);
+
     const absolute = resolve(cwd);
     let stat;
     try {
@@ -134,11 +144,10 @@ export class SessionManager {
       throw new Error(`ディレクトリではありません: ${absolute}`);
     }
 
-    const id = randomUUID();
     const session = makeIdleSession(id, absolute, Date.now());
 
     if (this.useTmux) {
-      const name = tmuxSessionName(id);
+      const name = tmuxSessionName(id, this.tmuxPrefix);
       this.ensureTmuxConfLoaded();
       startTmuxSession({
         socket: this.tmuxSocket,
@@ -178,7 +187,7 @@ export class SessionManager {
   recover(): number {
     if (!this.useTmux) return 0;
 
-    const infos = listTmuxSessions(this.tmuxSocket);
+    const infos = listTmuxSessions(this.tmuxSocket, this.tmuxPrefix);
     if (infos.length === 0) return 0;
 
     // 古い設定のまま動き続けているサーバにも、今の設定を届けてから繋ぎ直す。
@@ -187,7 +196,7 @@ export class SessionManager {
     let recovered = 0;
     for (const info of infos) {
       if (this.entries.has(info.id)) continue;
-      const name = tmuxSessionName(info.id);
+      const name = tmuxSessionName(info.id, this.tmuxPrefix);
       const session = makeIdleSession(info.id, info.cwd, info.createdAt);
       this.register(session, this.attach(name), name);
       recovered += 1;

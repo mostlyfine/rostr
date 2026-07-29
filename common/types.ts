@@ -18,6 +18,14 @@ export interface Session {
   updatedAt: number;
 }
 
+/**
+ * API が返すセッション。スプリットの開閉はサーバ側のシェルの有無で表すので、
+ * クライアントは自前で開閉状態を持たず、この値だけを見る。
+ */
+export interface SessionView extends Session {
+  shell: boolean;
+}
+
 /** 状態遷移に必要な hook イベント。設定生成と状態遷移の両方がこの一覧を参照する。 */
 export const HOOKED_EVENTS = [
   "SessionStart",
