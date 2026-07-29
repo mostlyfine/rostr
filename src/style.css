@@ -156,7 +156,22 @@
   --state-exited: var(--ctp-overlay0);
 }
 
+/*
+ * 文字サイズも色と同じくトークン経由で参照する。--font-scale は index.html の
+ * インラインスクリプトと useFontScale が <html> の style に付ける倍率で、
+ * サイドバーの +/- で 0.8〜1.6 の範囲を動く。素の値（等倍時の px）は
+ * 11〜17px の 6 段階しかないので、その段階をそのままトークンにしてある。
+ */
 :root {
+  --font-scale: 1;
+
+  --fs-2xs: calc(11px * var(--font-scale));
+  --fs-xs: calc(12px * var(--font-scale));
+  --fs-sm: calc(13px * var(--font-scale));
+  --fs-md: calc(14px * var(--font-scale));
+  --fs-lg: calc(15px * var(--font-scale));
+  --fs-xl: calc(17px * var(--font-scale));
+
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
 }
 

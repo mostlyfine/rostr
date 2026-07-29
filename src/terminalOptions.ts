@@ -1,11 +1,12 @@
 import type { ITerminalOptions } from "@xterm/xterm";
+import { terminalFontSize } from "./fontScale";
 import { XTERM_THEMES } from "./theme";
 import type { Theme } from "./theme";
 
 /** ターミナル生成時に渡すオプション。単体テストできるようコンポーネントから切り出してある。 */
-export const createTerminalOptions = (theme: Theme): ITerminalOptions => ({
+export const createTerminalOptions = (theme: Theme, scale: number): ITerminalOptions => ({
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, "Courier New", monospace',
-  fontSize: 16,
+  fontSize: terminalFontSize(scale),
   cursorBlink: true,
   allowProposedApi: true,
   // 普段はマウス報告を xterm へ渡さない（terminalMouse.ts）ので素のドラッグで選択できる。

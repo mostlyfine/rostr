@@ -218,12 +218,12 @@ const onSubmit = async (cwd: string) => {
   border-bottom: 1px solid var(--border);
 }
 .main-title {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-strong);
 }
 .main-cwd {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
@@ -232,7 +232,7 @@ const onSubmit = async (cwd: string) => {
   border: 1px solid var(--border-control);
   background: var(--bg-control);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 2px 8px;
   border-radius: 5px;
   cursor: pointer;
@@ -254,7 +254,7 @@ const onSubmit = async (cwd: string) => {
 }
 .placeholder {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   padding: 24px;
 }
 </style>

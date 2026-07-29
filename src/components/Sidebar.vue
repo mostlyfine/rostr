@@ -3,6 +3,7 @@ import { computed } from "vue";
 import type { Session } from "../../common/types";
 import { toSidebarRows } from "../sessionGroups";
 import { useTheme } from "../composables/useTheme";
+import { useFontScale } from "../composables/useFontScale";
 import SessionItem from "./SessionItem.vue";
 
 const props = defineProps<{ sessions: Session[]; selectedId: string | null }>();
@@ -10,6 +11,13 @@ const emit = defineEmits<{ select: [id: string]; close: [id: string]; create: []
 
 const rows = computed(() => toSidebarRows(props.sessions));
 const { label: themeLabel, toggle: toggleTheme } = useTheme();
+const {
+  label: fontScaleLabel,
+  canIncrease,
+  canDecrease,
+  increase: increaseFont,
+  decrease: decreaseFont,
+} = useFontScale();
 </script>
 
 <template>
@@ -17,6 +25,24 @@ const { label: themeLabel, toggle: toggleTheme } = useTheme();
     <header class="header">
       <h1>rostr</h1>
       <div class="actions">
+        <button
+          class="font"
+          data-test="font-decrease"
+          :title="fontScaleLabel"
+          :disabled="!canDecrease"
+          @click="decreaseFont()"
+        >
+          −
+        </button>
+        <button
+          class="font"
+          data-test="font-increase"
+          :title="fontScaleLabel"
+          :disabled="!canIncrease"
+          @click="increaseFont()"
+        >
+          ＋
+        </button>
         <button
           class="theme"
           data-test="theme-toggle"
@@ -55,7 +81,8 @@ const { label: themeLabel, toggle: toggleTheme } = useTheme();
 
 <style scoped>
 .sidebar {
-  width: 320px;
+  /* 文字だけ大きくすると幅が足りずセッション名が読めなくなるので、幅も倍率に追従させる。 */
+  width: calc(320px * var(--font-scale));
   flex: none;
   display: flex;
   flex-direction: column;
@@ -71,7 +98,7 @@ const { label: themeLabel, toggle: toggleTheme } = useTheme();
 }
 h1 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-lg);
   color: var(--text-strong);
 }
 .actions {
@@ -80,23 +107,32 @@ h1 {
   gap: 6px;
 }
 .new,
-.theme {
+.theme,
+.font {
   border: 1px solid var(--border-control);
   background: var(--bg-control);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   padding: 4px 10px;
   border-radius: 5px;
   cursor: pointer;
 }
 .new:hover,
-.theme:hover {
+.theme:hover,
+.font:not(:disabled):hover {
   background: var(--bg-control-hover);
 }
-/* 絵文字1文字なので、+ 新規 と高さを揃えつつ左右を詰める。 */
-.theme {
+/* 1文字のボタンなので、+ 新規 と高さを揃えつつ左右を詰める。 */
+.theme,
+.font {
   padding: 4px 7px;
   line-height: 1.35;
+}
+/* 上下限。押しても何も起きないことを見て分かるようにする。 */
+.font:disabled {
+  color: var(--text-muted);
+  border-color: var(--border);
+  cursor: default;
 }
 .list {
   flex: 1;
@@ -105,7 +141,7 @@ h1 {
 }
 .empty {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.6;
   padding: 8px;
 }
@@ -114,7 +150,7 @@ h1 {
   align-items: center;
   gap: 6px;
   padding: 2px 4px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-tertiary);
@@ -127,7 +163,7 @@ h1 {
   color: var(--text-secondary);
   border-radius: 8px;
   padding: 0 6px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 .rows {
   list-style: none;

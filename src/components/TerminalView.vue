@@ -15,7 +15,9 @@ import {
   toCell,
 } from "../terminalMouse";
 import { createReplayGate } from "../terminalReplay";
+import { terminalFontSize } from "../fontScale";
 import { useTheme } from "../composables/useTheme";
+import { useFontScale } from "../composables/useFontScale";
 
 /** shell はスプリットで開くシェル。id は claude のセッションと共有し、繋ぐ先だけが違う。 */
 const props = withDefaults(
@@ -24,6 +26,7 @@ const props = withDefaults(
 );
 
 const { theme: currentTheme } = useTheme();
+const { scale: fontScale } = useFontScale();
 
 const host = ref<HTMLDivElement | null>(null);
 let term: Terminal | null = null;
@@ -58,7 +61,7 @@ const fit = () => {
 };
 
 onMounted(() => {
-  term = new Terminal(createTerminalOptions(currentTheme.value));
+  term = new Terminal(createTerminalOptions(currentTheme.value, fontScale.value));
   fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
   term.loadAddon(new WebLinksAddon());
@@ -141,6 +144,14 @@ watch(
 // xterm は Canvas 描画で CSS 変数を追えないので、切り替えのたびに theme を差し替える。
 watch(currentTheme, (theme) => {
   if (term) term.options.theme = XTERM_THEMES[theme];
+});
+
+// フォントサイズも同様に CSS では届かない。サイズが変わると列数・行数とセル寸法が
+// 変わるので、再描画されてから fit で測り直す（cell が古いとホイールの座標がずれる）。
+watch(fontScale, (scale) => {
+  if (!term) return;
+  term.options.fontSize = terminalFontSize(scale);
+  requestAnimationFrame(() => fit());
 });
 
 defineExpose({ focus, hasFocus });
