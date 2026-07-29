@@ -24,8 +24,8 @@ runs with the same ref skip the rebuild and start immediately.
 To pin a specific branch, tag, or commit:
 
 ```bash
+npx github:mostlyfine/rostr
 npx github:mostlyfine/rostr#v0.2.0
-npx github:mostlyfine/rostr#some-branch
 ```
 
 The requirements above still apply, and the environment variables below
@@ -48,6 +48,11 @@ To run a production build on a single port:
 npm run build
 npm run server   # http://localhost:8787
 ```
+
+`npm run server` only serves the `dist/` snapshot produced by the last
+`npm run build`; it does not rebuild on its own. Re-run `npm run build` after
+any client-side change, or use `npm run dev` (http://localhost:5173) instead,
+which picks up changes via Vite's HMR.
 
 ## Environment variables
 
