@@ -36,7 +36,7 @@ const { label: themeLabel, toggle: toggleTheme } = useTheme();
 
       <TransitionGroup tag="ul" name="row" class="rows">
         <template v-for="row in rows" :key="row.key">
-          <li v-if="row.kind === 'header'" class="group-label">
+          <li v-if="row.kind === 'header'" class="group-label" :class="row.state">
             <span data-test="group-label">{{ row.label }}</span>
             <span class="count">{{ row.count }}</span>
           </li>
@@ -128,6 +128,24 @@ h1 {
   border-radius: 8px;
   padding: 0 6px;
   font-size: 11px;
+}
+/*
+ * 見出しの状態を色でも分かるようにする。文字ではなくバッジを塗るのは、13px の見出しに
+ * 状態色を直接乗せると light テーマでコントラスト比が 4.5:1 を割るため。
+ * idle と exited は「まだ手が要らない」「もう終わった」状態で目を引く必要がないので、
+ * 彩度を与えず既定のグレーのままにする。
+ */
+.group-label.waiting .count {
+  background: var(--state-waiting);
+  color: var(--state-badge-fg);
+}
+.group-label.working .count {
+  background: var(--state-working);
+  color: var(--state-badge-fg);
+}
+.group-label.done .count {
+  background: var(--state-done);
+  color: var(--state-badge-fg);
 }
 .rows {
   list-style: none;

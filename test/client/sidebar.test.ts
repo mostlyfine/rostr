@@ -96,6 +96,26 @@ describe("Sidebar", () => {
     expect(wrapper.findAll("[data-test=group-label]").map((el) => el.text())).toEqual(["Idle"]);
   });
 
+  /* 件数バッジを状態色で塗るために、見出しへ状態クラスを付けている。 */
+  it("見出しに状態クラスを付ける", () => {
+    const wrapper = mount(Sidebar, {
+      props: {
+        sessions: [
+          session({ id: "a", state: "done" }),
+          session({ id: "b", state: "waiting" }),
+          session({ id: "c", state: "working" }),
+        ],
+        selectedId: null,
+      },
+    });
+    const headings = wrapper.findAll("li.group-label");
+    expect(headings.map((el) => el.classes())).toEqual([
+      ["group-label", "done"],
+      ["group-label", "waiting"],
+      ["group-label", "working"],
+    ]);
+  });
+
   it("セッションが無いときは案内を出す", () => {
     const wrapper = mount(Sidebar, { props: { sessions: [], selectedId: null } });
     expect(wrapper.text()).toContain("No agents.");

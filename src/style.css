@@ -72,6 +72,8 @@
   --state-working: var(--ctp-blue);
   --state-done: var(--ctp-green);
   --state-exited: var(--ctp-overlay0);
+  /* 状態色を背景に敷いたバッジへ載せる文字。Macchiato の状態色は明るいので暗い側を取る。 */
+  --state-badge-fg: var(--ctp-base);
 }
 
 :root[data-theme="light"] {
@@ -81,6 +83,8 @@
    * Catppuccin Latte。ただし yellow と blue は公式パレット（#df8e1d, #1e66f5）より
    * 明度を落としてある。状態インジケータ（--state-waiting/--state-working）の背景に
    * 対するコントラスト比が低すぎたため（例: yellow は --bg-sidebar に対し 2.15:1）。
+   * green も同じ理由で公式の #40a02b より暗い。こちらは背景として使う側の都合で、
+   * 状態色を敷いた件数バッジに白文字を載せると公式値では 3.34:1 しか出ない。
    */
   --ctp-rosewater: #dc8a78;
   --ctp-flamingo: #dd7878;
@@ -90,7 +94,7 @@
   --ctp-maroon: #e64553;
   --ctp-peach: #fe640b;
   --ctp-yellow: #9e6515;
-  --ctp-green: #40a02b;
+  --ctp-green: #2f7a1f;
   --ctp-teal: #179299;
   --ctp-sky: #04a5e5;
   --ctp-sapphire: #209fb5;
@@ -154,6 +158,12 @@
   --state-working: var(--ctp-blue);
   --state-done: var(--ctp-green);
   --state-exited: var(--ctp-overlay0);
+  /*
+   * Latte の状態色は暗い側に寄せてあるので、バッジの文字は明るい側を取る。ただし
+   * --ctp-base（#eff1f5）では yellow のバッジに対し 4.25:1 で足りないため純白にする。
+   * Latte のパレットには純白が無く、ここだけパレット層を経由しない。
+   */
+  --state-badge-fg: #fff;
 }
 
 :root {
