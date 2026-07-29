@@ -7,7 +7,6 @@ const RECONNECT_MS = 1_000;
 /** サーバの一覧を SSE で購読し、操作用の API 呼び出しをまとめる。 */
 export const useSessions = () => {
   const sessions = ref<SessionView[]>([]);
-  const connected = ref(false);
 
   let source: EventSource | undefined;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -18,7 +17,6 @@ export const useSessions = () => {
 
     source.onmessage = (event) => {
       sessions.value = JSON.parse(event.data) as SessionView[];
-      connected.value = true;
     };
 
     /*
@@ -28,7 +26,6 @@ export const useSessions = () => {
      * 以降サーバが戻っても一覧が二度と更新されない。状態も実行内容も古いまま固まる。
      */
     source.onerror = () => {
-      connected.value = false;
       if (source?.readyState !== EventSource.CLOSED) return;
       source.close();
       source = undefined;
@@ -73,5 +70,5 @@ export const useSessions = () => {
     await fetch(`/api/sessions/${id}/shell`, { method: "DELETE" });
   };
 
-  return { sessions, connected, create, close, openShell, closeShell };
+  return { sessions, create, close, openShell, closeShell };
 };

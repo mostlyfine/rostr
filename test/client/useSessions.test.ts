@@ -99,17 +99,15 @@ describe("useSessions の再接続", () => {
     latest().emit([session({ id: "a", activity: "Edit App.vue" })]);
     await nextTick();
     expect(api.sessions.value[0].activity).toBe("Edit App.vue");
-    expect(api.connected.value).toBe(true);
   });
 
   it("ブラウザが自力で繋ぎ直す切断では張り直さない", async () => {
-    const { api } = mountHost();
+    mountHost();
 
     latest().failTemporarily();
     await vi.runOnlyPendingTimersAsync();
 
     expect(FakeEventSource.instances).toHaveLength(1);
-    expect(api.connected.value).toBe(false);
   });
 
   it("アンマウント後は張り直さない", async () => {

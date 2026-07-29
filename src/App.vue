@@ -20,11 +20,14 @@ const openedIds = ref<string[]>([]);
 
 const selectedSession = computed(() => sessions.value.find((s) => s.id === selectedId.value) ?? null);
 
-/** 各ターミナルへフォーカスを渡すための参照。v-for なので id をキーに自分で持つ。 */
+/**
+ * 各ターミナルへフォーカスを渡すための参照。v-for なので id をキーに自分で持つ。
+ * スプリットで開いたシェルは id が claude 側と同じなので、種別を前置きして区別する。
+ */
+type TerminalKind = "agent" | "shell";
 type TerminalHandle = { focus: () => void; hasFocus: () => boolean };
 const terminals = new Map<string, TerminalHandle>();
-/** スプリットで開いたシェル。id は claude 側と同じなので別の Map に分ける。 */
-const shellTerminals = new Map<string, TerminalHandle>();
+const terminalKey = (kind: TerminalKind, id: string) => `${kind}:${id}`;
 
 /** スプリットの開閉はサーバが持つシェルの有無が正。ブラウザ側では覚えない。 */
 const shellOpenIds = computed(
@@ -38,15 +41,14 @@ const pendingShellFocus = ref<string | null>(null);
 /** 直前に見たセッション状態。waiting/done への「遷移」を検知するための基準値。 */
 const prevStates = new Map<string, AgentState>();
 
-const registerTerminal = (id: string) => (instance: unknown) => {
-  if (instance) terminals.set(id, instance as TerminalHandle);
-  else terminals.delete(id);
+const registerTerminal = (kind: TerminalKind, id: string) => (instance: unknown) => {
+  const key = terminalKey(kind, id);
+  if (instance) terminals.set(key, instance as TerminalHandle);
+  else terminals.delete(key);
 };
 
-const registerShell = (id: string) => (instance: unknown) => {
-  if (instance) shellTerminals.set(id, instance as TerminalHandle);
-  else shellTerminals.delete(id);
-};
+/** 指定した種別のターミナルへフォーカスを渡す。既に片付いていれば何もしない。 */
+const focusTerminal = (kind: TerminalKind, id: string) => terminals.get(terminalKey(kind, id))?.focus();
 
 /**
  * 選択中セッションの脇にシェルを開く / 閉じる。
@@ -57,7 +59,7 @@ const toggleSplit = async () => {
   if (!id) return;
   if (splitOpen.value) {
     await closeShell(id);
-    terminals.get(id)?.focus();
+    focusTerminal("agent", id);
     return;
   }
   pendingShellFocus.value = id;
@@ -72,7 +74,7 @@ const select = async (id: string) => {
   selectedId.value = id;
   if (!openedIds.value.includes(id)) openedIds.value.push(id);
   await nextTick();
-  terminals.get(id)?.focus();
+  focusTerminal("agent", id);
 };
 
 /**
@@ -90,24 +92,24 @@ const focusNewlyNotable = (list: Session[]) => {
     );
   });
   if (!newlyNotable) return;
-  const selectedIsBusy = !!selectedId.value && (terminals.get(selectedId.value)?.hasFocus() ?? false);
+  const selectedIsBusy =
+    !!selectedId.value && (terminals.get(terminalKey("agent", selectedId.value))?.hasFocus() ?? false);
   if (!selectedIsBusy) select(newlyNotable.id);
 };
 
 /** 押した直後に開いたシェルへフォーカスを移す。描画されるのはこの一覧が届いた後。 */
-const focusOpenedShell = async (list: Session[]) => {
+const focusOpenedShell = async () => {
   const id = pendingShellFocus.value;
+  // シェルが一覧に居ることは、その親セッションが一覧に残っていることでもある。
   if (!id || !shellOpenIds.value.has(id)) return;
   pendingShellFocus.value = null;
-  // 一覧から消えたセッションのシェルは開かない。
-  if (!list.some((session) => session.id === id)) return;
   await nextTick();
-  shellTerminals.get(id)?.focus();
+  focusTerminal("shell", id);
 };
 
 // 削除されたセッションのターミナルを片付け、選択を別のセッションへ移す。
 watch(sessions, (list) => {
-  focusOpenedShell(list);
+  focusOpenedShell();
   focusNewlyNotable(list);
   prevStates.clear();
   for (const session of list) prevStates.set(session.id, session.state);
@@ -115,8 +117,10 @@ watch(sessions, (list) => {
   const alive = new Set(list.map((session) => session.id));
   openedIds.value = openedIds.value.filter((id) => alive.has(id));
   if (selectedId.value && !alive.has(selectedId.value)) {
-    selectedId.value = list[0]?.id ?? null;
-    if (selectedId.value) select(selectedId.value);
+    // select() が自分で selectedId を書くので、残りが無いときだけここで選択を外す。
+    const next = list[0]?.id;
+    if (next) select(next);
+    else selectedId.value = null;
   }
 });
 
@@ -169,13 +173,13 @@ const onSubmit = async (cwd: string) => {
       <div class="terminals">
         <template v-for="id in openedIds" :key="id">
           <TerminalView
-            :ref="registerTerminal(id)"
+            :ref="registerTerminal('agent', id)"
             :session-id="id"
             :visible="id === selectedId"
           />
           <TerminalView
             v-if="shellOpenIds.has(id)"
-            :ref="registerShell(id)"
+            :ref="registerTerminal('shell', id)"
             :session-id="id"
             kind="shell"
             :visible="id === selectedId"
