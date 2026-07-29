@@ -266,6 +266,10 @@ export class SessionManager {
    * 会話が作り直された（= applyHookEvent が summary をリセットした）ら世代を進めて古い結果を
    * 捨てさせ、ターンが終わったら生成を依頼する。「作り直された」の判定を hook_event_name で
    * 二重に行わず、applyHookEvent が実際に出したパッチをそのまま使う。
+   *
+   * UserPromptSubmit は Stop を待たず即座に依頼する。ユーザーの新しい意図をサイドバーに
+   * 早く反映するためだが、バックグラウンドタスク通知の自動投入（applyHookEvent が空パッチを
+   * 返すケース）まで依頼してしまうと無駄な生成が増えるので、実際にパッチが出た場合に限る。
    */
   private updateSummary(id: string, entry: Entry, event: HookEvent, patch: Partial<Session>): void {
     const summarizer = this.options.summarizer;
@@ -275,7 +279,9 @@ export class SessionManager {
       summarizer.reset(id);
       return;
     }
-    if (event.hook_event_name !== "Stop") return;
+    const isStop = event.hook_event_name === "Stop";
+    const isRealUserPrompt = event.hook_event_name === "UserPromptSubmit" && Object.keys(patch).length > 0;
+    if (!isStop && !isRealUserPrompt) return;
     if (!entry.transcriptPath) return;
 
     summarizer.request(id, entry.transcriptPath, (summary) => this.setSummary(id, summary));

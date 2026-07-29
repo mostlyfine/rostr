@@ -426,7 +426,11 @@ describe("SessionManager の要約", () => {
     });
     manager.applyHook(session.id, { hook_event_name: "Stop" });
 
-    expect(fake.requests.map((r) => [r.id, r.path])).toEqual([[session.id, "/tmp/conv.jsonl"]]);
+    // UserPromptSubmit の時点でも1回、Stop でさらに1回、あわせて2回依頼される。
+    expect(fake.requests.map((r) => [r.id, r.path])).toEqual([
+      [session.id, "/tmp/conv.jsonl"],
+      [session.id, "/tmp/conv.jsonl"],
+    ]);
   });
 
   it("transcript_path を一度も受け取っていなければ依頼しない", () => {
@@ -435,6 +439,34 @@ describe("SessionManager の要約", () => {
     const session = manager.create("/tmp");
 
     manager.applyHook(session.id, { hook_event_name: "Stop" });
+    expect(fake.requests).toEqual([]);
+  });
+
+  it("UserPromptSubmit でも transcript_path があれば直ちに要約を依頼する", () => {
+    const fake = fakeSummarizer();
+    const manager = newManager({ summarizer: fake.summarizer });
+    const session = manager.create("/tmp");
+
+    manager.applyHook(session.id, {
+      hook_event_name: "UserPromptSubmit",
+      prompt: "直したい",
+      transcript_path: "/tmp/conv.jsonl",
+    });
+
+    expect(fake.requests.map((r) => [r.id, r.path])).toEqual([[session.id, "/tmp/conv.jsonl"]]);
+  });
+
+  it("バックグラウンドタスク通知による UserPromptSubmit では要約を依頼しない", () => {
+    const fake = fakeSummarizer();
+    const manager = newManager({ summarizer: fake.summarizer });
+    const session = manager.create("/tmp");
+
+    manager.applyHook(session.id, {
+      hook_event_name: "UserPromptSubmit",
+      prompt: "<task-notification>done</task-notification>",
+      transcript_path: "/tmp/conv.jsonl",
+    });
+
     expect(fake.requests).toEqual([]);
   });
 
