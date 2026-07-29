@@ -5,7 +5,7 @@ import type { Theme } from "./theme";
 /** ターミナル生成時に渡すオプション。単体テストできるようコンポーネントから切り出してある。 */
 export const createTerminalOptions = (theme: Theme): ITerminalOptions => ({
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, "Courier New", monospace',
-  fontSize: 13,
+  fontSize: 16,
   cursorBlink: true,
   allowProposedApi: true,
   // 普段はマウス報告を xterm へ渡さない（terminalMouse.ts）ので素のドラッグで選択できる。
