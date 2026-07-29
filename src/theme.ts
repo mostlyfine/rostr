@@ -29,12 +29,42 @@ export const saveTheme = (theme: Theme): void => {
 /** トグルを押したときの次のテーマ。dark と light を往復する。 */
 export const nextTheme = (theme: Theme): Theme => (theme === "dark" ? "light" : "dark");
 
+const CUBE_LEVELS = [0, 95, 135, 175, 215, 255];
+const toHex = (r: number, g: number, b: number) =>
+  `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+
+/**
+ * xterm 標準の 256 色パレット（16〜255）を計算し、overrides で指定した番号だけ差し替える。
+ * claude CLI 自身が Markdown のインラインコードなどに 256 色（例: 153）を直接指定してくる
+ * ため、ITheme の基本 16 色だけでは色をコントロールしきれない。他の番号は標準値のまま
+ * 引き継がないと、指定していない色まで変わってしまう。
+ */
+const buildExtendedAnsi = (overrides: Record<number, string>): string[] => {
+  const colors: string[] = [];
+  for (let i = 16; i <= 255; i++) {
+    if (overrides[i]) {
+      colors.push(overrides[i]);
+    } else if (i < 232) {
+      const n = i - 16;
+      colors.push(toHex(CUBE_LEVELS[Math.floor(n / 36) % 6], CUBE_LEVELS[Math.floor(n / 6) % 6], CUBE_LEVELS[n % 6]));
+    } else {
+      const v = 8 + (i - 232) * 10;
+      colors.push(toHex(v, v, v));
+    }
+  }
+  return colors;
+};
+
 /**
  * xterm は Canvas に描くので CSS 変数を読めない。ここだけ style.css と同じ Catppuccin の
  * 色を JS 側にも持つ。background は --bg-app（base）と一致させること。ズレると
  * TerminalView の親要素に敷いた --bg-app との差でリサイズ時に縁が出る。
  * ANSI 16 色は catppuccin/palette の ansiColors、cursor は nvim の Cursor に倣って
  * rosewater、selectionBackground は Visual に倣って surface1。
+ * ただし light の white/brightWhite は ansiColors 準拠の値（surface2/surface1）だと
+ * base に対するコントラストが 2:1 未満で読めないため、overlay2/overlay1 に差し替えている。
+ * 同様に claude CLI がインラインコードに使う 256 色パレットの 153 番（薄い水色）も
+ * base に対して 1.33:1 しかないため、extendedAnsi で blue と同じ色に差し替えている。
  */
 export const XTERM_THEMES: Record<Theme, ITheme> = {
   // Catppuccin Macchiato
@@ -75,7 +105,7 @@ export const XTERM_THEMES: Record<Theme, ITheme> = {
     blue: "#1e66f5",
     magenta: "#ea76cb",
     cyan: "#179299",
-    white: "#acb0be",
+    white: "#7c7f93",
     brightBlack: "#6c6f85",
     brightRed: "#de293e",
     brightGreen: "#49af3d",
@@ -83,6 +113,7 @@ export const XTERM_THEMES: Record<Theme, ITheme> = {
     brightBlue: "#456eff",
     brightMagenta: "#fe85d8",
     brightCyan: "#2d9fa8",
-    brightWhite: "#bcc0cc",
+    brightWhite: "#8c8fa1",
+    extendedAnsi: buildExtendedAnsi({ 153: "#0a50dc" }),
   },
 };
