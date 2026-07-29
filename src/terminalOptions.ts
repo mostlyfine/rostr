@@ -8,8 +8,8 @@ export const createTerminalOptions = (theme: Theme): ITerminalOptions => ({
   fontSize: 13,
   cursorBlink: true,
   allowProposedApi: true,
-  // tmux 側の mouse on でドラッグは tmux に吸われる。xterm 側で選択に戻せるのは
-  // 「強制選択」だけで、Mac ではこの指定が無いと Option ドラッグも効かず選択手段が無くなる。
+  // 普段はマウス報告を xterm へ渡さない（terminalMouse.ts）ので素のドラッグで選択できる。
+  // 何かの拍子に報告が有効になった場合の逃げ道として、Mac の Option ドラッグを残しておく。
   // Mac 以外は既定で Shift ドラッグが強制選択になるので、追加の指定は要らない。
   macOptionClickForcesSelection: true,
   // tmux 経由では代替画面なので効かない（履歴は tmux 側にある）。

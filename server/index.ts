@@ -51,8 +51,8 @@ const attach = (ws: WebSocket, sessionId: string) => {
   // 途中から接続したブラウザにも直前までの画面を見せる。
   // スクロールバックは末尾しか残らず、tmux が attach 直後に一度だけ送る端末モード
   // ——代替画面・bracketed paste・SGR マウス報告——は早々に切り捨てられる。
-  // 落ちたままだとホイールがマウスイベントとして tmux へ届かず、copy-mode に入れない。
-  // 画面を描き直す前に端末をその状態へ戻しておく。
+  // 落ちたままだと画面が壊れ、ブラウザは tmux がマウスを欲しがっていることも知れずに
+  // ホイールを送らなくなる。画面を描き直す前に端末をその状態へ戻しておく。
   const replay = manager.terminalModes(sessionId) + manager.scrollback(sessionId);
   if (replay) ws.send(replay);
 

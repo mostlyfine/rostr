@@ -4,7 +4,7 @@ import { XTERM_THEMES } from "../../src/theme";
 
 describe("createTerminalOptions", () => {
   it("Mac の Option ドラッグで選択を強制できるようにする", () => {
-    // tmux の mouse on でマウスイベントが tmux へ渡るため、これが無いと Mac では選択できない。
+    // マウス報告が有効になってしまった場合の逃げ道。Mac では Shift ドラッグが効かない。
     expect(createTerminalOptions("dark").macOptionClickForcesSelection).toBe(true);
   });
 
