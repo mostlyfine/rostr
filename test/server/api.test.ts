@@ -1,42 +1,17 @@
-import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import request from "supertest";
+import type { SessionView } from "../../common/types";
 import { createApp } from "../../server/app";
-import { SessionManager } from "../../server/sessions";
-
-const managers: SessionManager[] = [];
-
-const newManager = () => {
-  const manager = new SessionManager({
-    agentBin: "/bin/sh",
-    buildArgs: () => [],
-    port: 0,
-    scrollbackChars: 4096,
-    // API の形だけを見るテストなので、本番の tmux サーバへセッションを残さない。
-    tmux: false,
-  });
-  managers.push(manager);
-  return manager;
-};
+import { newManager } from "./helpers/manager";
+import { withEventStream } from "./helpers/sse";
+import { waitFor } from "./helpers/waitFor";
 
 const setup = () => {
   const manager = newManager();
   const shells = newManager();
   return { manager, shells, app: createApp(manager, shells) };
 };
-
-const waitFor = async (predicate: () => boolean, timeoutMs = 5000) => {
-  const start = Date.now();
-  while (!predicate()) {
-    if (Date.now() - start > timeoutMs) throw new Error("waitFor timed out");
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-};
-
-afterEach(() => {
-  for (const manager of managers.splice(0)) manager.disposeAll();
-});
 
 describe("静的ファイルの配信", () => {
   it("dist を渡すと index.html を配信する", async () => {
@@ -195,80 +170,28 @@ describe("GET /api/events", () => {
     const { app, manager } = setup();
     manager.create("/tmp");
 
-    const server = app.listen(0);
-    await new Promise((resolve) => server.once("listening", resolve));
-    const port = (server.address() as AddressInfo).port;
-    const controller = new AbortController();
-
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/api/events`, { signal: controller.signal });
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      const readUntilFrames = async (count: number) => {
-        while (buffer.split("\n\n").length - 1 < count) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-        }
-        return buffer
-          .split("\n\n")
-          .filter((frame) => frame.startsWith("data: "))
-          .map((frame) => JSON.parse(frame.slice("data: ".length)));
-      };
-
-      const [first] = await readUntilFrames(1);
+    await withEventStream(app, async (readFrames) => {
+      const [first] = (await readFrames(1)) as SessionView[][];
       expect(first).toHaveLength(1);
       expect(first[0].cwd).toBe("/tmp");
 
       manager.create("/tmp");
-      const frames = await readUntilFrames(2);
+      const frames = (await readFrames(2)) as SessionView[][];
       expect(frames[1]).toHaveLength(2);
-    } finally {
-      controller.abort();
-      await new Promise((resolve) => server.close(resolve));
-    }
+    });
   });
 
   it("シェルを開いても配り直す", async () => {
     const { app, manager, shells } = setup();
     const session = manager.create("/tmp");
 
-    const server = app.listen(0);
-    await new Promise((resolve) => server.once("listening", resolve));
-    const port = (server.address() as AddressInfo).port;
-    const controller = new AbortController();
-
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/api/events`, {
-        signal: controller.signal,
-      });
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      const readUntilFrames = async (count: number) => {
-        while (buffer.split("\n\n").length - 1 < count) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-        }
-        return buffer
-          .split("\n\n")
-          .filter((frame) => frame.startsWith("data: "))
-          .map((frame) => JSON.parse(frame.slice("data: ".length)));
-      };
-
-      const [first] = await readUntilFrames(1);
+    await withEventStream(app, async (readFrames) => {
+      const [first] = (await readFrames(1)) as SessionView[][];
       expect(first[0].shell).toBe(false);
 
       shells.create("/tmp", session.id);
-      const frames = await readUntilFrames(2);
+      const frames = (await readFrames(2)) as SessionView[][];
       expect(frames[1][0].shell).toBe(true);
-    } finally {
-      controller.abort();
-      await new Promise((resolve) => server.close(resolve));
-    }
+    });
   });
 });

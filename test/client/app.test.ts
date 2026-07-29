@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
 import { mount } from "@vue/test-utils";
 import type { SessionView } from "../../common/types";
+import { FakeEventSource, latestEventSource as latest } from "./helpers/fakeEventSource";
+import { sessionView as session } from "../helpers/session";
 
 const focusSpy = vi.fn();
 let hasFocusReturn = false;
@@ -25,39 +27,10 @@ vi.mock("../../src/components/TerminalView.vue", () => ({
   }),
 }));
 
-class FakeEventSource {
-  static instances: FakeEventSource[] = [];
-  onmessage: ((event: { data: string }) => void) | null = null;
-  onerror: (() => void) | null = null;
-  close = vi.fn();
-
-  constructor(public url: string) {
-    FakeEventSource.instances.push(this);
-  }
-
-  emit(sessions: SessionView[]) {
-    this.onmessage?.({ data: JSON.stringify(sessions) });
-  }
-}
-
-const session = (over: Partial<SessionView>): SessionView => ({
-  id: "id",
-  cwd: "/tmp/proj",
-  title: "proj",
-  state: "idle",
-  prompt: "",
-  activity: "",
-  summary: "",
-  createdAt: 0,
-  updatedAt: 0,
-  shell: false,
-  ...over,
-});
-
 const mountApp = async (sessions: SessionView[]) => {
   const App = (await import("../../src/App.vue")).default;
   const wrapper = mount(App, { attachTo: document.body });
-  FakeEventSource.instances.at(-1)!.emit(sessions);
+  latest().emit(sessions);
   await nextTick();
   return wrapper;
 };
@@ -127,7 +100,7 @@ describe("App のフォーカス制御", () => {
     focusSpy.mockClear();
 
     // サーバから a が消えた一覧が届く。
-    FakeEventSource.instances.at(-1)!.emit([session({ id: "b" })]);
+    latest().emit([session({ id: "b" })]);
     await nextTick();
     await nextTick();
 
@@ -185,7 +158,7 @@ describe("ターミナルのスプリット", () => {
 
     await wrapper.find("[data-test=split-toggle]").trigger("click");
     // シェルが現れるのはサーバが shell: true を配ってから。
-    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", shell: true })]);
+    latest().emit([session({ id: "a", shell: true })]);
     await nextTick();
     await nextTick();
 
@@ -213,7 +186,7 @@ describe("waiting/done への自動フォーカス", () => {
     focusSpy.mockClear();
     hasFocusReturn = false;
 
-    FakeEventSource.instances.at(-1)!.emit([
+    latest().emit([
       session({ id: "a", state: "working" }),
       session({ id: "b", state: "waiting" }),
     ]);
@@ -231,7 +204,7 @@ describe("waiting/done への自動フォーカス", () => {
     focusSpy.mockClear();
     hasFocusReturn = true;
 
-    FakeEventSource.instances.at(-1)!.emit([
+    latest().emit([
       session({ id: "a", state: "working" }),
       session({ id: "b", state: "waiting" }),
     ]);
@@ -248,7 +221,7 @@ describe("waiting/done への自動フォーカス", () => {
     await nextTick();
     focusSpy.mockClear();
 
-    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", state: "waiting" })]);
+    latest().emit([session({ id: "a", state: "waiting" })]);
     await nextTick();
     await nextTick();
 
@@ -259,7 +232,7 @@ describe("waiting/done への自動フォーカス", () => {
     await mountApp([session({ id: "a", state: "idle" }), session({ id: "b", state: "working" })]);
     focusSpy.mockClear();
 
-    FakeEventSource.instances.at(-1)!.emit([
+    latest().emit([
       session({ id: "a", state: "idle" }),
       session({ id: "b", state: "done" }),
     ]);

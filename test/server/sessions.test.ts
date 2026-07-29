@@ -3,29 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionManager } from "../../server/sessions";
 import type { Summarizer } from "../../server/summary";
 import { SHELL_TMUX_PREFIX, isTmuxAvailable, tmuxSessionName } from "../../server/tmux";
-
-/** claude の代わりに sh を起動する。テストでは実際のエージェントは要らない。 */
-const managers: SessionManager[] = [];
-
-const newManager = (
-  opts: {
-    buildArgs?: (id: string) => string[];
-    scrollbackChars?: number;
-    summarizer?: Summarizer;
-  } = {},
-) => {
-  const manager = new SessionManager({
-    agentBin: "/bin/sh",
-    buildArgs: opts.buildArgs ?? (() => []),
-    port: 0,
-    scrollbackChars: opts.scrollbackChars ?? 64,
-    summarizer: opts.summarizer,
-    // この describe は tmux を挟まない直接起動の経路を見る。
-    tmux: false,
-  });
-  managers.push(manager);
-  return manager;
-};
+import { newManager, trackManager } from "./helpers/manager";
+import { waitFor } from "./helpers/waitFor";
 
 /** 依頼を記録するだけの summarizer。apply を手で呼んで結果の反映を確かめる。 */
 const fakeSummarizer = () => {
@@ -37,18 +16,6 @@ const fakeSummarizer = () => {
   };
   return { requests, resets, summarizer };
 };
-
-const waitFor = async (predicate: () => boolean, timeoutMs = 5000) => {
-  const start = Date.now();
-  while (!predicate()) {
-    if (Date.now() - start > timeoutMs) throw new Error("waitFor timed out");
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-};
-
-afterEach(() => {
-  for (const manager of managers.splice(0)) manager.disposeAll();
-});
 
 describe("SessionManager", () => {
   it("create でセッションが一覧に現れる", () => {
@@ -270,18 +237,17 @@ const tmuxSessionNames = (): string[] => {
 };
 
 describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
-  const newTmuxManager = () => {
-    const manager = new SessionManager({
-      agentBin: "/bin/sh",
-      buildArgs: () => [],
-      port: 0,
-      scrollbackChars: 8192,
-      tmux: true,
-      tmuxSocket: TEST_SOCKET,
-    });
-    managers.push(manager);
-    return manager;
-  };
+  const newTmuxManager = () =>
+    trackManager(
+      new SessionManager({
+        agentBin: "/bin/sh",
+        buildArgs: () => [],
+        port: 0,
+        scrollbackChars: 8192,
+        tmux: true,
+        tmuxSocket: TEST_SOCKET,
+      }),
+    );
 
   afterEach(() => {
     spawnSync("tmux", ["-L", TEST_SOCKET, "kill-server"], { stdio: "ignore" });
@@ -381,19 +347,18 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
 
   /** シェル用のマネージャは前置きだけを変えた同じ仕組み。互いの tmux セッションを拾わない。 */
   describe("tmuxPrefix でシェル用に分ける", () => {
-    const newShellManager = () => {
-      const manager = new SessionManager({
-        agentBin: "/bin/sh",
-        buildArgs: () => [],
-        port: 0,
-        scrollbackChars: 8192,
-        tmux: true,
-        tmuxSocket: TEST_SOCKET,
-        tmuxPrefix: SHELL_TMUX_PREFIX,
-      });
-      managers.push(manager);
-      return manager;
-    };
+    const newShellManager = () =>
+      trackManager(
+        new SessionManager({
+          agentBin: "/bin/sh",
+          buildArgs: () => [],
+          port: 0,
+          scrollbackChars: 8192,
+          tmux: true,
+          tmuxSocket: TEST_SOCKET,
+          tmuxPrefix: SHELL_TMUX_PREFIX,
+        }),
+      );
 
     it("シェル用の前置きで tmux セッションが立つ", async () => {
       const shells = newShellManager();

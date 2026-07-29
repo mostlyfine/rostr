@@ -1,18 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { applyHookEvent, summarizeTool, truncateOneLine } from "../../server/state";
-import type { Session } from "../../common/types";
+import { session } from "../helpers/session";
 
-const base: Session = {
-  id: "s1",
-  cwd: "/tmp/proj",
-  title: "proj",
-  state: "idle",
-  prompt: "",
-  activity: "",
-  summary: "",
-  createdAt: 0,
-  updatedAt: 0,
-};
+const base = session({ id: "s1" });
 
 describe("truncateOneLine", () => {
   it("改行を空白に潰す", () => {

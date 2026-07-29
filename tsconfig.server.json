@@ -1,5 +1,5 @@
 {
-  "include": ["server/**/*.ts", "common/**/*.ts", "test/server/**/*.ts"],
+  "include": ["server/**/*.ts", "common/**/*.ts", "test/server/**/*.ts", "test/helpers/**/*.ts"],
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2023"],

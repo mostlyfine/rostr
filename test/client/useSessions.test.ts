@@ -1,60 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
 import { mount } from "@vue/test-utils";
-import type { Session } from "../../common/types";
 import { useSessions } from "../../src/composables/useSessions";
-
-/** EventSource の readyState。仕様どおりの値を使う。 */
-const CONNECTING = 0;
-const OPEN = 1;
-const CLOSED = 2;
-
-class FakeEventSource {
-  static CONNECTING = CONNECTING;
-  static OPEN = OPEN;
-  static CLOSED = CLOSED;
-  static instances: FakeEventSource[] = [];
-
-  onmessage: ((event: { data: string }) => void) | null = null;
-  onerror: (() => void) | null = null;
-  readyState = OPEN;
-  close = vi.fn(() => {
-    this.readyState = CLOSED;
-  });
-
-  constructor(public url: string) {
-    FakeEventSource.instances.push(this);
-  }
-
-  emit(sessions: Session[]) {
-    this.onmessage?.({ data: JSON.stringify(sessions) });
-  }
-
-  /** ブラウザが自力で繋ぎ直す一時的な切断。 */
-  failTemporarily() {
-    this.readyState = CONNECTING;
-    this.onerror?.();
-  }
-
-  /** 再接続先が SSE として不正だった場合の恒久的な失敗。 */
-  failPermanently() {
-    this.readyState = CLOSED;
-    this.onerror?.();
-  }
-}
-
-const session = (over: Partial<Session>): Session => ({
-  id: "id",
-  cwd: "/tmp/proj",
-  title: "proj",
-  state: "idle",
-  prompt: "",
-  activity: "",
-  summary: "",
-  createdAt: 0,
-  updatedAt: 0,
-  ...over,
-});
+import { FakeEventSource, latestEventSource as latest } from "./helpers/fakeEventSource";
+import { session } from "../helpers/session";
 
 /** useSessions を動かすためだけのホスト。onUnmounted を効かせるために component が要る。 */
 const mountHost = () => {
@@ -70,8 +19,6 @@ const mountHost = () => {
   // biome-ignore lint: setup は mount 中に必ず走る。
   return { wrapper, api: api! };
 };
-
-const latest = () => FakeEventSource.instances.at(-1)!;
 
 beforeEach(() => {
   vi.useFakeTimers();

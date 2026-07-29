@@ -4,19 +4,7 @@ import Sidebar from "../../src/components/Sidebar.vue";
 import SessionItem from "../../src/components/SessionItem.vue";
 import { toSidebarRows } from "../../src/sessionGroups";
 import type { Session } from "../../common/types";
-
-const session = (over: Partial<Session>): Session => ({
-  id: "id",
-  cwd: "/tmp/proj",
-  title: "proj",
-  state: "idle",
-  prompt: "",
-  activity: "",
-  summary: "",
-  createdAt: 0,
-  updatedAt: 0,
-  ...over,
-});
+import { session } from "../helpers/session";
 
 describe("toSidebarRows", () => {
   it("見出しとセッションを状態順に1列へ並べる", () => {
