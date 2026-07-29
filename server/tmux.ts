@@ -77,7 +77,11 @@ export const sessionIdFromName = (
   return id === "" ? undefined : id;
 };
 
-/** 設定を一時ファイルへ書き出し、そのパスを返す。 */
+/**
+ * 設定を一時ファイルへ書き出し、そのパスを返す。
+ * 内容は定数だが、書き出しを一度きりにはしない。一時ディレクトリの掃除でファイルが
+ * 消えたときに、次の起動で黙って存在しないパスを tmux へ渡すことになる。
+ */
 export const writeTmuxConf = (): string => writeSettingsFile("tmux.conf", TMUX_CONF);
 
 /**
@@ -187,12 +191,19 @@ export const startTmuxSession = (options: NewSessionOptions): void => {
   throw new Error(`tmux セッションを開始できません: ${reason}`);
 };
 
+const reloadedSockets = new Set<string>();
+
 /**
  * -f で渡した設定は tmux サーバの起動時にしか読まれない。
  * 既に動いているサーバにも新しい設定を届けるため、繋ぐ前に読み直させる。
  * サーバがまだ無ければ失敗するが、その場合は new-session の -f が読むので放っておく。
+ *
+ * エージェントとシェルの SessionManager は同じソケットを共有するので、覚えるのは
+ * インスタンスではなくソケット単位。届ける内容は定数で、二度目に意味は無い。
  */
 export const reloadTmuxConf = (socket: string, conf: string): void => {
+  if (reloadedSockets.has(socket)) return;
+  reloadedSockets.add(socket);
   spawnSync("tmux", buildSourceFileArgs(socket, conf), { stdio: "ignore" });
 };
 

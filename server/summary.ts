@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import { truncate } from "./text";
 import { parseTranscript, type ConversationTurn } from "./transcript";
 
@@ -175,8 +175,31 @@ export const runClaudeHeadless =
       child.stdin.end(stdin);
     });
 
-/** 会話 JSONL を読む既定の実装。 */
-export const readTranscriptFile = (path: string): Promise<string> => readFile(path, "utf8");
+/**
+ * 会話 JSONL から読む末尾のバイト数。
+ * 要約に使うのは末尾のユーザー発言 5 件と最後のアシスタント発言 1 件だけ（renderTurns）で、
+ * ファイルの大半を占める tool_result は parseTranscript が確実に捨てる。数 MB のファイルを
+ * Stop のたびに丸ごと読んで全行 JSON.parse する必要はない。
+ */
+export const TRANSCRIPT_TAIL_BYTES = 256 * 1024;
+
+/**
+ * 会話 JSONL を読む既定の実装。大きいファイルは末尾だけ読む。
+ * 切り出しの先頭が行の途中になることがあるが、parseTranscript が壊れた行を黙って飛ばす。
+ */
+export const readTranscriptFile = async (path: string): Promise<string> => {
+  const handle = await open(path, "r");
+  try {
+    const { size } = await handle.stat();
+    if (size <= TRANSCRIPT_TAIL_BYTES) return await handle.readFile("utf8");
+
+    const buffer = Buffer.allocUnsafe(TRANSCRIPT_TAIL_BYTES);
+    const { bytesRead } = await handle.read(buffer, 0, TRANSCRIPT_TAIL_BYTES, size - TRANSCRIPT_TAIL_BYTES);
+    return buffer.subarray(0, bytesRead).toString("utf8");
+  } finally {
+    await handle.close();
+  }
+};
 
 export interface SummarizerFromEnv {
   /** ROSTR_SUMMARY=0 なら undefined。呼び出し側は要約機能そのものが無いものとして扱う。 */

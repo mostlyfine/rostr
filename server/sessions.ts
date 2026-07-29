@@ -47,7 +47,9 @@ interface Entry {
   session: Session;
   /** tmux 経由なら attach しているクライアント、そうでなければエージェント本体。 */
   proc: IPty;
-  scrollback: string;
+  /** 届いた順の出力。読み出すときに繋いで切り詰める。 */
+  chunks: string[];
+  chunksLength: number;
   /** スクロールバックの切り詰めで失われる端末モードを別に覚えておく。 */
   modes: ModeTracker;
   listeners: Set<OutputListener>;
@@ -111,8 +113,6 @@ export class SessionManager {
   private readonly useTmux: boolean;
   private readonly tmuxSocket: string;
   private readonly tmuxPrefix: string;
-  private tmuxConfPath?: string;
-  private tmuxConfLoaded = false;
 
   constructor(private readonly options: SessionManagerOptions) {
     this.scrollbackChars = options.scrollbackChars ?? DEFAULT_SCROLLBACK_CHARS;
@@ -148,10 +148,10 @@ export class SessionManager {
 
     if (this.useTmux) {
       const name = tmuxSessionName(id, this.tmuxPrefix);
-      this.ensureTmuxConfLoaded();
+      reloadTmuxConf(this.tmuxSocket, writeTmuxConf());
       startTmuxSession({
         socket: this.tmuxSocket,
-        conf: this.tmuxConf(),
+        conf: writeTmuxConf(),
         name,
         cwd: absolute,
         cols: DEFAULT_COLS,
@@ -191,7 +191,7 @@ export class SessionManager {
     if (infos.length === 0) return 0;
 
     // 古い設定のまま動き続けているサーバにも、今の設定を届けてから繋ぎ直す。
-    this.ensureTmuxConfLoaded();
+    reloadTmuxConf(this.tmuxSocket, writeTmuxConf());
 
     let recovered = 0;
     for (const info of infos) {
@@ -215,7 +215,9 @@ export class SessionManager {
   }
 
   scrollback(id: string): string {
-    return this.entries.get(id)?.scrollback ?? "";
+    const entry = this.entries.get(id);
+    if (!entry) return "";
+    return this.compact(entry);
   }
 
   /**
@@ -262,6 +264,14 @@ export class SessionManager {
 
     this.updateSummary(id, entry, event, patch);
     return true;
+  }
+
+  /** 溜まったチャンクを 1 本に繋いで上限まで切り詰め、その結果を返す。 */
+  private compact(entry: Entry): string {
+    const scrollback = entry.chunks.join("").slice(-this.scrollbackChars);
+    entry.chunks = [scrollback];
+    entry.chunksLength = scrollback.length;
+    return scrollback;
   }
 
   /** パッチが現在の値を実際に書き換えるか。 */
@@ -344,22 +354,9 @@ export class SessionManager {
     }
   }
 
-  /** tmux の設定ファイルは初回に一度だけ書き出す。 */
-  private tmuxConf(): string {
-    this.tmuxConfPath ??= writeTmuxConf();
-    return this.tmuxConfPath;
-  }
-
-  /** 動いている tmux サーバへの読み直しは、この設定で一度届けていれば済む。 */
-  private ensureTmuxConfLoaded(): void {
-    if (this.tmuxConfLoaded) return;
-    reloadTmuxConf(this.tmuxSocket, this.tmuxConf());
-    this.tmuxConfLoaded = true;
-  }
-
   /** 既存の tmux セッションへ繋ぐクライアントを PTY として起動する。 */
   private attach(name: string): IPty {
-    return pty.spawn("tmux", buildAttachArgs(this.tmuxSocket, this.tmuxConf(), name), {
+    return pty.spawn("tmux", buildAttachArgs(this.tmuxSocket, writeTmuxConf(), name), {
       name: "xterm-256color",
       cols: DEFAULT_COLS,
       rows: DEFAULT_ROWS,
@@ -372,7 +369,8 @@ export class SessionManager {
     const entry: Entry = {
       session,
       proc,
-      scrollback: "",
+      chunks: [],
+      chunksLength: 0,
       modes: createModeTracker(),
       listeners: new Set(),
       tmuxName,
@@ -381,7 +379,11 @@ export class SessionManager {
 
     proc.onData((data) => {
       entry.modes.feed(data);
-      entry.scrollback = (entry.scrollback + data).slice(-this.scrollbackChars);
+      entry.chunks.push(data);
+      entry.chunksLength += data.length;
+      // 溜まりすぎたときだけ繋ぎ直す。チャンクごとに切り詰めると、上限に達したあとは
+      // 出力 1 回ごとに上限ぶんの文字列コピーが走る。
+      if (entry.chunksLength > this.scrollbackChars * 2) this.compact(entry);
       for (const listener of entry.listeners) listener(data);
     });
 
