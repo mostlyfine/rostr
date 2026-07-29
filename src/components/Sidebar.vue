@@ -133,11 +133,17 @@ h1 {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  /*
+   * flex にはしない。flex コンテナの絶対配置された子は静的位置がコンテナの先頭になるため、
+   * 抜けていく行が元の位置ではなく一覧の先頭へ飛び、そこにある行に重なってしまう。
+   */
+  display: block;
   /* 抜けていく行を absolute で浮かせるので、その基準になる。 */
   position: relative;
+}
+/* flex をやめたので、行の間隔は gap ではなくここで作る。 */
+.rows > li + li {
+  margin-top: 2px;
 }
 
 /* 状態が変わった行が別のグループへ動く様子を追えるようにする。 */
@@ -152,10 +158,15 @@ h1 {
 .row-leave-to {
   opacity: 0;
 }
-/* 消えていく行を流れから外し、残った行がその場で詰まれるようにする。 */
+/*
+ * 消えていく行を流れから外し、残った行がその場で詰まれるようにする。
+ * 流れから外れた行は詰まってきた行の上に重なる。opacity が 0 でもクリックは受け取ってしまい、
+ * 下の行を選べなくなるので、消えていく行は当たり判定から外す。
+ */
 .row-leave-active {
   position: absolute;
   left: 0;
   right: 0;
+  pointer-events: none;
 }
 </style>
