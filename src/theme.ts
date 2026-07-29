@@ -56,6 +56,24 @@ const buildExtendedAnsi = (overrides: Record<number, string>): string[] => {
 };
 
 /**
+ * cube のコーナー 231（純白）とグレースケール域 232〜255 は dark 用の値では base
+ * （#eff1f5）とほぼ同化してしまう（255番=v238 で contrast 比約1.1:1）。
+ * white/brightWhite を overlay2/overlay1 に差し替えたのと同じ理由で、明るい側の
+ * 上限を overlay2 相当の輝度（v=128、white の contrast 比 3.5:1 と同水準）に
+ * 頭打ちさせる。
+ */
+const LIGHT_GRAYSCALE_MAX = 128;
+const buildLightGrayscaleOverrides = (): Record<number, string> => {
+  const overrides: Record<number, string> = { 231: toHex(LIGHT_GRAYSCALE_MAX, LIGHT_GRAYSCALE_MAX, LIGHT_GRAYSCALE_MAX) };
+  for (let i = 232; i <= 255; i++) {
+    const t = (i - 232) / (255 - 232);
+    const v = Math.round(8 + t * (LIGHT_GRAYSCALE_MAX - 8));
+    overrides[i] = toHex(v, v, v);
+  }
+  return overrides;
+};
+
+/**
  * xterm は Canvas に描くので CSS 変数を読めない。ここだけ style.css と同じ Catppuccin の
  * 色を JS 側にも持つ。background は --bg-app（base）と一致させること。ズレると
  * TerminalView の親要素に敷いた --bg-app との差でリサイズ時に縁が出る。
@@ -114,6 +132,6 @@ export const XTERM_THEMES: Record<Theme, ITheme> = {
     brightMagenta: "#fe85d8",
     brightCyan: "#2d9fa8",
     brightWhite: "#8c8fa1",
-    extendedAnsi: buildExtendedAnsi({ 153: "#0a50dc" }),
+    extendedAnsi: buildExtendedAnsi({ 153: "#0a50dc", ...buildLightGrayscaleOverrides() }),
   },
 };
