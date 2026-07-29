@@ -14,6 +14,7 @@ import {
   sgrWheelSequence,
   toCell,
 } from "../terminalMouse";
+import { createReplayGate } from "../terminalReplay";
 import { useTheme } from "../composables/useTheme";
 
 /** shell はスプリットで開くシェル。id は claude のセッションと共有し、繋ぐ先だけが違う。 */
@@ -63,7 +64,15 @@ onMounted(() => {
   term.loadAddon(new WebLinksAddon());
   term.open(host.value!);
   screen = term.element!.querySelector(".xterm-screen");
-  term.onData((data) => send({ type: "input", data }));
+  // 再接続直後の replay（端末モード再現 + スクロールバック）には、tmux が attach 時に
+  // 送った Device Attributes の問い合わせがそのまま含まれている。xterm はこれを書き込む
+  // 際に自動応答を作ってしまうが、tmux はもう問い合わせを待っておらず、応答をただの
+  // 入力としてシェルへ素通ししてしまう。replay の書き込み中だけその応答を捨てる。
+  const replayGate = createReplayGate(term);
+  term.onData((data) => {
+    if (replayGate.shouldSuppress()) return;
+    send({ type: "input", data });
+  });
   // Shift+Enter だけは xterm の既定（CR 送出）を止めて自前で送る。claude の /terminal-setup が
   // iTerm2 などに設定するのと同じシーケンスなので、ローカルのターミナルと同じ操作感になる。
   term.attachCustomKeyEventHandler((event) => {
@@ -102,7 +111,7 @@ onMounted(() => {
   const kind = props.kind === "shell" ? "&kind=shell" : "";
   socket = new WebSocket(`${protocol}//${location.host}/ws?session=${props.sessionId}${kind}`);
   // サーバは接続直後にスクロールバックを、その後は PTY の出力をそのまま送ってくる。
-  socket.onmessage = (event) => term?.write(event.data as string);
+  socket.onmessage = (event) => void replayGate.write(event.data as string);
   socket.onopen = () => fit();
 
   observer = new ResizeObserver(() => fit());
