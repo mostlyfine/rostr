@@ -86,7 +86,7 @@ describe("Sidebar", () => {
       },
     });
     const headings = wrapper.findAll("[data-test=group-label]").map((el) => el.text());
-    expect(headings).toEqual(["Done", "Needs Attention", "Running"]);
+    expect(headings).toEqual(["Done", "Blocked", "Working"]);
   });
 
   it("該当セッションが無い状態のグループは描画しない", () => {

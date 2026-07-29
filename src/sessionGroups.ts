@@ -7,8 +7,8 @@ export const NOTABLE_STATES: AgentState[] = ["waiting", "done"];
 export const STATE_ORDER: AgentState[] = ["done", "waiting", "working", "idle", "exited"];
 
 export const STATE_LABEL: Record<AgentState, string> = {
-  waiting: "Needs Attention",
-  working: "Running",
+  waiting: "Blocked",
+  working: "Working",
   done: "Done",
   idle: "Idle",
   exited: "Exited",

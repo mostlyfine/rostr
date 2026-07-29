@@ -74,9 +74,9 @@ which picks up changes via Vite's HMR.
 | Hook event | State |
 | --- | --- |
 | `SessionStart` | Idle (clears the prompt and activity of the previous conversation) |
-| `UserPromptSubmit` | Running (records the prompt) |
-| `PreToolUse` | Running (shows a summary such as `Bash npm test`) |
-| `Notification` | Needs attention (permission prompt or waiting for input) |
+| `UserPromptSubmit` | Working (records the prompt) |
+| `PreToolUse` | Working (shows a summary such as `Bash npm test`) |
+| `Notification` | Blocked (permission prompt or waiting for input) |
 | `Stop` | Done |
 | `SessionEnd` | Ended |
 
