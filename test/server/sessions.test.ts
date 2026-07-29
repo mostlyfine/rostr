@@ -162,6 +162,32 @@ describe("SessionManager", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  // PostToolUse は常に working を返すが、直前の PreToolUse で既に working になっている。
+  // ツール 1 回ごとに全セッションを全接続へ配り直す必要はない。
+  it("同じ値のパッチでは change を通知しない", () => {
+    const manager = newManager();
+    const session = manager.create("/tmp");
+    manager.applyHook(session.id, { hook_event_name: "PreToolUse", tool_name: "Bash" });
+    const onChange = vi.fn();
+    manager.onChange(onChange);
+    manager.applyHook(session.id, { hook_event_name: "PostToolUse", tool_name: "Bash" });
+    expect(onChange).not.toHaveBeenCalled();
+    // activity は PreToolUse が入れたものが残る。
+    expect(manager.get(session.id)?.activity).toBe("Bash");
+  });
+
+  // permission prompt で waiting に落ちたあとの PostToolUse は本当に状態を戻す。
+  it("値が実際に変わるなら change を通知する", () => {
+    const manager = newManager();
+    const session = manager.create("/tmp");
+    manager.applyHook(session.id, { hook_event_name: "Notification", message: "許可して" });
+    const onChange = vi.fn();
+    manager.onChange(onChange);
+    manager.applyHook(session.id, { hook_event_name: "PostToolUse", tool_name: "Bash" });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(manager.get(session.id)?.state).toBe("working");
+  });
+
   it("kill するとプロセスが終了して一覧から消える", async () => {
     const manager = newManager();
     const session = manager.create("/tmp");

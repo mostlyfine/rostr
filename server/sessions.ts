@@ -252,13 +252,21 @@ export class SessionManager {
     }
 
     const patch = applyHookEvent(entry.session, event);
-    if (Object.keys(patch).length > 0) {
+    // パッチが出ても値が同じことがある。PostToolUse は常に working を返すが、直前の
+    // PreToolUse で既に working になっているので、通常の流れでは何も変わらない。
+    // そのまま配ると、ツール呼び出し 1 回ごとに全セッションが全接続へ再送される。
+    if (this.hasChanges(entry.session, patch)) {
       entry.session = { ...entry.session, ...patch, updatedAt: Date.now() };
       this.emitChange();
     }
 
     this.updateSummary(id, entry, event, patch);
     return true;
+  }
+
+  /** パッチが現在の値を実際に書き換えるか。 */
+  private hasChanges(session: Session, patch: Partial<Session>): boolean {
+    return (Object.keys(patch) as (keyof Session)[]).some((key) => session[key] !== patch[key]);
   }
 
   /**
