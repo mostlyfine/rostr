@@ -1,12 +1,12 @@
 import { onUnmounted, ref } from "vue";
-import type { Session } from "../../common/types";
+import type { Session, SessionView } from "../../common/types";
 
 /** 張り直すまでの間隔。サーバの再起動が終わる程度には待ち、人が気づく前には戻る長さ。 */
 const RECONNECT_MS = 1_000;
 
 /** サーバの一覧を SSE で購読し、操作用の API 呼び出しをまとめる。 */
 export const useSessions = () => {
-  const sessions = ref<Session[]>([]);
+  const sessions = ref<SessionView[]>([]);
   const connected = ref(false);
 
   let source: EventSource | undefined;
@@ -17,7 +17,7 @@ export const useSessions = () => {
     source = new EventSource("/api/events");
 
     source.onmessage = (event) => {
-      sessions.value = JSON.parse(event.data) as Session[];
+      sessions.value = JSON.parse(event.data) as SessionView[];
       connected.value = true;
     };
 
@@ -61,5 +61,17 @@ export const useSessions = () => {
     await fetch(`/api/sessions/${id}`, { method: "DELETE" });
   };
 
-  return { sessions, connected, create, close };
+  /** スプリットのシェルを開く。開閉の状態は SSE で配られる shell フラグが持つ。 */
+  const openShell = async (id: string): Promise<void> => {
+    const res = await fetch(`/api/sessions/${id}/shell`, { method: "POST" });
+    if (res.ok) return;
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ?? "Failed to open shell");
+  };
+
+  const closeShell = async (id: string): Promise<void> => {
+    await fetch(`/api/sessions/${id}/shell`, { method: "DELETE" });
+  };
+
+  return { sessions, connected, create, close, openShell, closeShell };
 };

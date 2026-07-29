@@ -122,3 +122,36 @@ describe("useSessions の再接続", () => {
     expect(FakeEventSource.instances).toHaveLength(1);
   });
 });
+
+describe("useSessions のシェル操作", () => {
+  const stubFetch = (response: Partial<Response>) => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}), ...response }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  };
+
+  it("openShell はセッションのシェルを開く", async () => {
+    const fetchMock = stubFetch({});
+    const { api } = mountHost();
+
+    await api.openShell("abc");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/sessions/abc/shell", { method: "POST" });
+  });
+
+  it("openShell はサーバのエラーメッセージを投げる", async () => {
+    stubFetch({ ok: false, json: async () => ({ error: "起動できません" }) });
+    const { api } = mountHost();
+
+    await expect(api.openShell("abc")).rejects.toThrow("起動できません");
+  });
+
+  it("closeShell はセッションのシェルを閉じる", async () => {
+    const fetchMock = stubFetch({});
+    const { api } = mountHost();
+
+    await api.closeShell("abc");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/sessions/abc/shell", { method: "DELETE" });
+  });
+});

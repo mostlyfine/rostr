@@ -8,7 +8,7 @@ import { rememberRecentDir } from "./recentDirs";
 import { NOTABLE_STATES } from "./sessionGroups";
 import type { AgentState, Session } from "../common/types";
 
-const { sessions, create, close } = useSessions();
+const { sessions, create, close, openShell, closeShell } = useSessions();
 
 const selectedId = ref<string | null>(null);
 const dialogOpen = ref(false);
@@ -23,6 +23,17 @@ const selectedSession = computed(() => sessions.value.find((s) => s.id === selec
 /** 各ターミナルへフォーカスを渡すための参照。v-for なので id をキーに自分で持つ。 */
 type TerminalHandle = { focus: () => void; hasFocus: () => boolean };
 const terminals = new Map<string, TerminalHandle>();
+/** スプリットで開いたシェル。id は claude 側と同じなので別の Map に分ける。 */
+const shellTerminals = new Map<string, TerminalHandle>();
+
+/** スプリットの開閉はサーバが持つシェルの有無が正。ブラウザ側では覚えない。 */
+const shellOpenIds = computed(
+  () => new Set(sessions.value.filter((session) => session.shell).map((session) => session.id)),
+);
+const splitOpen = computed(() => selectedSession.value?.shell ?? false);
+
+/** 開いたシェルが実際に現れるのは SSE が届いてからなので、フォーカス先を覚えて待つ。 */
+const pendingShellFocus = ref<string | null>(null);
 
 /** 直前に見たセッション状態。waiting/done への「遷移」を検知するための基準値。 */
 const prevStates = new Map<string, AgentState>();
@@ -30,6 +41,27 @@ const prevStates = new Map<string, AgentState>();
 const registerTerminal = (id: string) => (instance: unknown) => {
   if (instance) terminals.set(id, instance as TerminalHandle);
   else terminals.delete(id);
+};
+
+const registerShell = (id: string) => (instance: unknown) => {
+  if (instance) shellTerminals.set(id, instance as TerminalHandle);
+  else shellTerminals.delete(id);
+};
+
+/**
+ * 選択中セッションの脇にシェルを開く / 閉じる。
+ * 開閉の結果は SSE の一覧に載って戻ってくるので、ここでは表示状態を触らない。
+ */
+const toggleSplit = async () => {
+  const id = selectedId.value;
+  if (!id) return;
+  if (splitOpen.value) {
+    await closeShell(id);
+    terminals.get(id)?.focus();
+    return;
+  }
+  pendingShellFocus.value = id;
+  await openShell(id);
 };
 
 /**
@@ -62,8 +94,20 @@ const focusNewlyNotable = (list: Session[]) => {
   if (!selectedIsBusy) select(newlyNotable.id);
 };
 
+/** 押した直後に開いたシェルへフォーカスを移す。描画されるのはこの一覧が届いた後。 */
+const focusOpenedShell = async (list: Session[]) => {
+  const id = pendingShellFocus.value;
+  if (!id || !shellOpenIds.value.has(id)) return;
+  pendingShellFocus.value = null;
+  // 一覧から消えたセッションのシェルは開かない。
+  if (!list.some((session) => session.id === id)) return;
+  await nextTick();
+  shellTerminals.get(id)?.focus();
+};
+
 // 削除されたセッションのターミナルを片付け、選択を別のセッションへ移す。
 watch(sessions, (list) => {
+  focusOpenedShell(list);
   focusNewlyNotable(list);
   prevStates.clear();
   for (const session of list) prevStates.set(session.id, session.state);
@@ -111,16 +155,32 @@ const onSubmit = async (cwd: string) => {
       <header v-if="selectedSession" class="main-header">
         <span class="main-title">{{ selectedSession.title }}</span>
         <span class="main-cwd">{{ selectedSession.cwd }}</span>
+        <button
+          class="split"
+          data-test="split-toggle"
+          :class="{ active: splitOpen }"
+          :title="splitOpen ? 'Close the shell' : 'Open a shell in this directory'"
+          @click="toggleSplit()"
+        >
+          ◫
+        </button>
       </header>
 
       <div class="terminals">
-        <TerminalView
-          v-for="id in openedIds"
-          :key="id"
-          :ref="registerTerminal(id)"
-          :session-id="id"
-          :visible="id === selectedId"
-        />
+        <template v-for="id in openedIds" :key="id">
+          <TerminalView
+            :ref="registerTerminal(id)"
+            :session-id="id"
+            :visible="id === selectedId"
+          />
+          <TerminalView
+            v-if="shellOpenIds.has(id)"
+            :ref="registerShell(id)"
+            :session-id="id"
+            kind="shell"
+            :visible="id === selectedId"
+          />
+        </template>
         <p v-if="!selectedId" class="placeholder">
           Select an agent from the sidebar, or launch one with "+ New".
         </p>
@@ -167,8 +227,28 @@ const onSubmit = async (cwd: string) => {
   color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
+.split {
+  margin-left: auto;
+  border: 1px solid var(--border-control);
+  background: var(--bg-control);
+  color: var(--text);
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  line-height: 1.35;
+}
+.split:hover {
+  background: var(--bg-control-hover);
+}
+/* 開いている間は押した状態に見せる。 */
+.split.active {
+  background: var(--bg-control-hover);
+  color: var(--text-strong);
+}
+/* 表示中のペインだけが並ぶ行。非表示のターミナルは display:none なので場所を取らない。 */
 .terminals {
-  position: relative;
+  display: flex;
   flex: 1;
   min-height: 0;
 }

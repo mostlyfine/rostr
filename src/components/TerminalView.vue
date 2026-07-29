@@ -16,7 +16,11 @@ import {
 } from "../terminalMouse";
 import { useTheme } from "../composables/useTheme";
 
-const props = defineProps<{ sessionId: string; visible: boolean }>();
+/** shell はスプリットで開くシェル。id は claude のセッションと共有し、繋ぐ先だけが違う。 */
+const props = withDefaults(
+  defineProps<{ sessionId: string; visible: boolean; kind?: "agent" | "shell" }>(),
+  { kind: "agent" },
+);
 
 const { theme: currentTheme } = useTheme();
 
@@ -95,7 +99,8 @@ onMounted(() => {
   });
 
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  socket = new WebSocket(`${protocol}//${location.host}/ws?session=${props.sessionId}`);
+  const kind = props.kind === "shell" ? "&kind=shell" : "";
+  socket = new WebSocket(`${protocol}//${location.host}/ws?session=${props.sessionId}${kind}`);
   // サーバは接続直後にスクロールバックを、その後は PTY の出力をそのまま送ってくる。
   socket.onmessage = (event) => term?.write(event.data as string);
   socket.onopen = () => fit();
@@ -139,15 +144,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-show="props.visible" ref="host" class="terminal" />
+  <div v-show="props.visible" ref="host" class="terminal" :class="{ shell: props.kind === 'shell' }" />
 </template>
 
 <style scoped>
+/* 親は flex 行。表示中のペインだけが並ぶので、等分するには伸縮の基準を 0 にしておく。 */
 .terminal {
-  width: 100%;
+  flex: 1 1 0;
+  min-width: 0;
   height: 100%;
   padding: 6px;
   box-sizing: border-box;
   background: var(--bg-app);
+}
+.shell {
+  border-left: 1px solid var(--border);
 }
 </style>

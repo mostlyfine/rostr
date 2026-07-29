@@ -4,8 +4,14 @@ import { writeSettingsFile } from "./settingsDir";
 /** ユーザー個人の tmux サーバと混ざらないよう、専用ソケットで動かす。 */
 export const DEFAULT_TMUX_SOCKET = "rostr";
 
-/** tmux セッション名の前置き。名前の残りがそのままセッション id になる。 */
-const SESSION_PREFIX = "rostr-";
+/**
+ * tmux セッション名の前置き。名前の残りがそのままセッション id になる。
+ * シェルは親エージェントと同じ id を使うので、区別できるのは前置きだけ。
+ * どちらか一方がもう一方の前置きで始まっていると復元時に取り違えるため、
+ * "rostr-" と "rostr_shell-" のように互いに前方一致しない綴りにしてある。
+ */
+export const AGENT_TMUX_PREFIX = "rostr-";
+export const SHELL_TMUX_PREFIX = "rostr_shell-";
 
 /**
  * ユーザーの ~/.tmux.conf を読ませないための最小設定。
@@ -59,11 +65,15 @@ export interface AgentCommandOptions {
   unsetKeys: readonly string[];
 }
 
-export const tmuxSessionName = (id: string): string => `${SESSION_PREFIX}${id}`;
+export const tmuxSessionName = (id: string, prefix = AGENT_TMUX_PREFIX): string =>
+  `${prefix}${id}`;
 
-export const sessionIdFromName = (name: string): string | undefined => {
-  if (!name.startsWith(SESSION_PREFIX)) return undefined;
-  const id = name.slice(SESSION_PREFIX.length);
+export const sessionIdFromName = (
+  name: string,
+  prefix = AGENT_TMUX_PREFIX,
+): string | undefined => {
+  if (!name.startsWith(prefix)) return undefined;
+  const id = name.slice(prefix.length);
   return id === "" ? undefined : id;
 };
 
@@ -140,11 +150,14 @@ export const buildListArgs = (socket: string): string[] => [
   LIST_FORMAT,
 ];
 
-export const parseListSessions = (stdout: string): TmuxSessionInfo[] => {
+export const parseListSessions = (
+  stdout: string,
+  prefix = AGENT_TMUX_PREFIX,
+): TmuxSessionInfo[] => {
   const sessions: TmuxSessionInfo[] = [];
   for (const line of stdout.split("\n")) {
     const [name, cwd, created] = line.split("\t");
-    const id = name ? sessionIdFromName(name) : undefined;
+    const id = name ? sessionIdFromName(name, prefix) : undefined;
     if (!id || !cwd) continue;
     const seconds = Number(created);
     // session_created は秒。読めない場合は復元時刻で代用する。
@@ -187,10 +200,13 @@ export const killTmuxSession = (socket: string, name: string): void => {
   spawnSync("tmux", buildKillArgs(socket, name), { stdio: "ignore" });
 };
 
-/** 生き残っている rostr のセッションを列挙する。 */
-export const listTmuxSessions = (socket: string): TmuxSessionInfo[] => {
+/** 生き残っている rostr のセッションを、指定した前置きのものだけ列挙する。 */
+export const listTmuxSessions = (
+  socket: string,
+  prefix = AGENT_TMUX_PREFIX,
+): TmuxSessionInfo[] => {
   const result = spawnSync("tmux", buildListArgs(socket), { encoding: "utf8" });
   // tmux サーバがまだ無いときは "error connecting to ..." で非ゼロ終了する。0 件として扱う。
   if (result.status !== 0 || typeof result.stdout !== "string") return [];
-  return parseListSessions(result.stdout);
+  return parseListSessions(result.stdout, prefix);
 };
