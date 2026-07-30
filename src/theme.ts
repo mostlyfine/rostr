@@ -1,32 +1,19 @@
 import type { ITheme } from "@xterm/xterm";
+import { readStored, writeStored } from "./storage";
 
 export const THEME_KEY = "rostr:theme";
 
-/** 適用される見た目。 */
 export type Theme = "light" | "dark";
 
 const isTheme = (value: unknown): value is Theme => value === "light" || value === "dark";
 
-/** 保存されたテーマを返す。未設定・未知の値はどちらも既定の dark に倒す。 */
 export const loadTheme = (): Theme => {
-  try {
-    const raw = localStorage.getItem(THEME_KEY);
-    return isTheme(raw) ? raw : "dark";
-  } catch {
-    return "dark";
-  }
+  const raw = readStored(THEME_KEY);
+  return isTheme(raw) ? raw : "dark";
 };
 
-/** テーマを保存する。 */
-export const saveTheme = (theme: Theme): void => {
-  try {
-    localStorage.setItem(THEME_KEY, theme);
-  } catch {
-    // プライベートモード等で書けなくても、その回の表示は続けられるので黙って諦める。
-  }
-};
+export const saveTheme = (theme: Theme): void => writeStored(THEME_KEY, theme);
 
-/** トグルを押したときの次のテーマ。dark と light を往復する。 */
 export const nextTheme = (theme: Theme): Theme => (theme === "dark" ? "light" : "dark");
 
 const CUBE_LEVELS = [0, 95, 135, 175, 215, 255];

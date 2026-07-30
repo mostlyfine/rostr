@@ -165,7 +165,6 @@ h1 {
   margin-top: 2px;
 }
 
-/* 状態が変わった行が別のグループへ動く様子を追えるようにする。 */
 .row-move {
   transition: transform 260ms ease;
 }

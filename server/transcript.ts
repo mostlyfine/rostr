@@ -21,7 +21,6 @@ interface RawRecord {
   message?: { role?: unknown; content?: unknown };
 }
 
-/** assistant レコードの content 配列から text ブロックだけを繋ぐ。 */
 const assistantText = (content: unknown): string => {
   if (!Array.isArray(content)) return "";
   const parts = content
@@ -36,7 +35,6 @@ const assistantText = (content: unknown): string => {
   return oneLine(parts.join(" "));
 };
 
-/** 1レコードを1ターンに変換する。要約に使わないレコードは undefined を返す。 */
 const toTurn = (record: RawRecord): ConversationTurn | undefined => {
   if (record.isSidechain === true || record.isMeta === true) return undefined;
 
@@ -59,19 +57,43 @@ const toTurn = (record: RawRecord): ConversationTurn | undefined => {
   return undefined;
 };
 
-/** JSONL 全体をターン列にする。壊れた行は黙って飛ばす。 */
+const parseLine = (line: string): ConversationTurn | undefined => {
+  if (line.trim() === "") return undefined;
+  try {
+    return toTurn(JSON.parse(line) as RawRecord);
+  } catch {
+    return undefined;
+  }
+};
+
 export const parseTranscript = (jsonl: string): ConversationTurn[] => {
   const turns: ConversationTurn[] = [];
   for (const line of jsonl.split("\n")) {
-    if (line.trim() === "") continue;
-    let record: RawRecord;
-    try {
-      record = JSON.parse(line) as RawRecord;
-    } catch {
-      continue;
-    }
-    const turn = toTurn(record);
+    const turn = parseLine(line);
     if (turn) turns.push(turn);
   }
   return turns;
+};
+
+/**
+ * 末尾から遡り、ユーザーの発言が userTurns 件そろうところまでを返す。
+ *
+ * 会話 JSONL は長いセッションで数 MB〜数十 MB に育つが、要約が実際に使うのは末尾の
+ * 数ターンだけなので、全行を JSON.parse すると履歴の長さに比例した停止時間が毎ターン乗る。
+ * 切り出す範囲は renderTurns がウィンドウの先頭として選ぶ位置と同じなので、
+ * 返り値をそのまま renderTurns に渡せば全体を渡したときと同じ結果になる。
+ */
+export const parseRecentTurns = (jsonl: string, userTurns: number): ConversationTurn[] => {
+  const lines = jsonl.split("\n");
+  const tail: ConversationTurn[] = [];
+  let users = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const turn = parseLine(lines[i]);
+    if (!turn) continue;
+    tail.push(turn);
+    if (turn.role !== "user") continue;
+    users += 1;
+    if (users === userTurns) break;
+  }
+  return tail.reverse();
 };

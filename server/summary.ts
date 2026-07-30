@@ -1,15 +1,11 @@
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { truncate } from "./text";
-import { parseTranscript, type ConversationTurn } from "./transcript";
+import { parseRecentTurns, type ConversationTurn } from "./transcript";
 
-/** 要約に渡す直近のユーザー発言数。 */
 const USER_TURN_WINDOW = 5;
-/** ユーザー発言1件あたりの文字数上限。 */
 const USER_TURN_CHARS = 600;
-/** アシスタント発言1件あたりの文字数上限。 */
 const ASSISTANT_TURN_CHARS = 160;
-/** サイドバーに出す要約の文字数上限。 */
 export const MAX_SUMMARY_CHARS = 80;
 
 /** claude -p に渡す指示。会話そのものは stdin から流す。 */
@@ -39,7 +35,6 @@ export const renderTurns = (turns: ConversationTurn[]): string => {
   return lines.join("\n");
 };
 
-/** モデルの出力をサイドバーに出せる1行に整える。 */
 export const sanitizeSummary = (raw: string): string => {
   const firstLine =
     raw
@@ -83,8 +78,7 @@ export const createSummarizer = (deps: SummarizerDeps): Summarizer => {
     const epoch = epochs.get(sessionId) ?? 0;
     try {
       const jsonl = await deps.readTranscript(transcriptPath);
-      const turns: ConversationTurn[] = parseTranscript(jsonl);
-      const stdin = renderTurns(turns);
+      const stdin = renderTurns(parseRecentTurns(jsonl, USER_TURN_WINDOW));
       if (stdin === "") return;
 
       const raw = await deps.runClaude({ prompt: SUMMARY_PROMPT, stdin });
@@ -139,10 +133,19 @@ export const runClaudeHeadless =
       let err = "";
       let settled = false;
 
-      const timer = setTimeout(() => {
+      /** 決着は一度だけ。発火済みのタイマーへの clearTimeout は無害なので分岐しない。 */
+      const settle = (finish: () => void) => {
+        if (settled) return;
         settled = true;
-        child.kill("SIGKILL");
-        reject(new Error(`要約がタイムアウトしました (${options.timeoutMs}ms)`));
+        clearTimeout(timer);
+        finish();
+      };
+
+      const timer = setTimeout(() => {
+        settle(() => {
+          child.kill("SIGKILL");
+          reject(new Error(`要約がタイムアウトしました (${options.timeoutMs}ms)`));
+        });
       }, options.timeoutMs);
       timer.unref?.();
 
@@ -155,27 +158,20 @@ export const runClaudeHeadless =
         err += chunk;
       });
 
-      child.on("error", (error) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(error);
-      });
+      child.on("error", (error) => settle(() => reject(error)));
 
-      child.on("close", (code) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        if (code === 0) resolve(out);
-        else reject(new Error(`claude が異常終了しました (code ${code}): ${err.trim()}`));
-      });
+      child.on("close", (code) =>
+        settle(() => {
+          if (code === 0) resolve(out);
+          else reject(new Error(`claude が異常終了しました (code ${code}): ${err.trim()}`));
+        }),
+      );
 
       // 子が stdin を読まずに終わると EPIPE が飛ぶ。要約の失敗としては扱わない。
       child.stdin.on("error", () => {});
       child.stdin.end(stdin);
     });
 
-/** 会話 JSONL を読む既定の実装。 */
 export const readTranscriptFile = (path: string): Promise<string> => readFile(path, "utf8");
 
 export interface SummarizerFromEnv {

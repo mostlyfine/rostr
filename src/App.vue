@@ -6,8 +6,9 @@ import TerminalView from "./components/TerminalView.vue";
 import { useSessions } from "./composables/useSessions";
 import { useFontScaleShortcut } from "./composables/useFontScaleShortcut";
 import { rememberRecentDir } from "./recentDirs";
-import { NOTABLE_STATES } from "./sessionGroups";
-import type { AgentState, Session } from "../common/types";
+import { findNewlyNotable } from "./sessionGroups";
+import { errorMessage } from "../common/error";
+import type { PaneKind, Session } from "../common/types";
 
 const { sessions, create, close, openShell, closeShell } = useSessions();
 
@@ -21,11 +22,12 @@ const openedIds = ref<string[]>([]);
 
 const selectedSession = computed(() => sessions.value.find((s) => s.id === selectedId.value) ?? null);
 
-/** 各ターミナルへフォーカスを渡すための参照。v-for なので id をキーに自分で持つ。 */
+/**
+ * 各ターミナルへフォーカスを渡すための参照。v-for なので id をキーに自分で持つ。
+ * シェルは claude 側と id を共有するので、種別ごとに台帳を分ける。
+ */
 type TerminalHandle = { focus: () => void; hasFocus: () => boolean };
-const terminals = new Map<string, TerminalHandle>();
-/** スプリットで開いたシェル。id は claude 側と同じなので別の Map に分ける。 */
-const shellTerminals = new Map<string, TerminalHandle>();
+const panes: Record<PaneKind, Map<string, TerminalHandle>> = { agent: new Map(), shell: new Map() };
 
 /** スプリットの開閉はサーバが持つシェルの有無が正。ブラウザ側では覚えない。 */
 const shellOpenIds = computed(
@@ -34,84 +36,55 @@ const shellOpenIds = computed(
 const splitOpen = computed(() => selectedSession.value?.shell ?? false);
 
 /** 開いたシェルが実際に現れるのは SSE が届いてからなので、フォーカス先を覚えて待つ。 */
-const pendingShellFocus = ref<string | null>(null);
+let pendingShellFocus: string | null = null;
 
-/** 直前に見たセッション状態。waiting/done への「遷移」を検知するための基準値。 */
-const prevStates = new Map<string, AgentState>();
-
-const registerTerminal = (id: string) => (instance: unknown) => {
-  if (instance) terminals.set(id, instance as TerminalHandle);
-  else terminals.delete(id);
+const register = (kind: PaneKind, id: string) => (instance: unknown) => {
+  if (instance) panes[kind].set(id, instance as TerminalHandle);
+  else panes[kind].delete(id);
 };
 
-const registerShell = (id: string) => (instance: unknown) => {
-  if (instance) shellTerminals.set(id, instance as TerminalHandle);
-  else shellTerminals.delete(id);
-};
-
-/**
- * 選択中セッションの脇にシェルを開く / 閉じる。
- * 開閉の結果は SSE の一覧に載って戻ってくるので、ここでは表示状態を触らない。
- */
+/** 開閉の結果は SSE の一覧に載って戻ってくるので、ここでは表示状態を触らない。 */
 const toggleSplit = async () => {
   const id = selectedId.value;
   if (!id) return;
   if (splitOpen.value) {
     await closeShell(id);
-    terminals.get(id)?.focus();
+    panes.agent.get(id)?.focus();
     return;
   }
-  pendingShellFocus.value = id;
+  pendingShellFocus = id;
   await openShell(id);
 };
 
-/**
- * サイドバーから選ぶと、そのままキー入力できるようメイン画面へフォーカスを移す。
- * 初回に開いた場合はここで初めてターミナルが生成されるので、描画を待ってから呼ぶ。
- */
+/** 初回に開いた場合はここで初めてターミナルが生成されるので、描画を待ってから呼ぶ。 */
 const select = async (id: string) => {
   selectedId.value = id;
   if (!openedIds.value.includes(id)) openedIds.value.push(id);
   await nextTick();
-  terminals.get(id)?.focus();
+  panes.agent.get(id)?.focus();
 };
 
-/**
- * waiting/done に新しく遷移したセッションを見つけ、いま操作中でなければそこへフォーカスを移す。
- * 選択中のターミナルに実際に入力中（hasFocus）の場合は奪わず、点滅による通知だけに任せる。
- */
-const focusNewlyNotable = (list: Session[]) => {
-  const newlyNotable = list.find((session) => {
-    const prev = prevStates.get(session.id);
-    return (
-      prev !== undefined &&
-      !NOTABLE_STATES.includes(prev) &&
-      NOTABLE_STATES.includes(session.state) &&
-      session.id !== selectedId.value
-    );
-  });
+/** 選択中のターミナルに実際に入力中の場合は奪わず、点滅による通知だけに任せる。 */
+const focusNewlyNotable = (list: Session[], previous: Session[]) => {
+  const newlyNotable = findNewlyNotable(previous, list, selectedId.value);
   if (!newlyNotable) return;
-  const selectedIsBusy = !!selectedId.value && (terminals.get(selectedId.value)?.hasFocus() ?? false);
+  const selectedIsBusy =
+    !!selectedId.value && (panes.agent.get(selectedId.value)?.hasFocus() ?? false);
   if (!selectedIsBusy) select(newlyNotable.id);
 };
 
-/** 押した直後に開いたシェルへフォーカスを移す。描画されるのはこの一覧が届いた後。 */
-const focusOpenedShell = async (list: Session[]) => {
-  const id = pendingShellFocus.value;
+/** シェルが描画されるのはこの一覧が届いた後なので、ここまで待ってからフォーカスする。 */
+const focusOpenedShell = async () => {
+  const id = pendingShellFocus;
   if (!id || !shellOpenIds.value.has(id)) return;
-  pendingShellFocus.value = null;
-  // 一覧から消えたセッションのシェルは開かない。
-  if (!list.some((session) => session.id === id)) return;
+  pendingShellFocus = null;
   await nextTick();
-  shellTerminals.get(id)?.focus();
+  panes.shell.get(id)?.focus();
 };
 
-// 削除されたセッションのターミナルを片付け、選択を別のセッションへ移す。
-watch(sessions, (list) => {
-  focusOpenedShell(list);
-  focusNewlyNotable(list);
-  prevStates.clear();
-  for (const session of list) prevStates.set(session.id, session.state);
+watch(sessions, (list, previous) => {
+  focusOpenedShell();
+  focusNewlyNotable(list, previous);
 
   const alive = new Set(list.map((session) => session.id));
   openedIds.value = openedIds.value.filter((id) => alive.has(id));
@@ -137,7 +110,7 @@ const onSubmit = async (cwd: string) => {
     dialogOpen.value = false;
     select(session.id);
   } catch (error) {
-    dialogError.value = error instanceof Error ? error.message : String(error);
+    dialogError.value = errorMessage(error);
   } finally {
     busy.value = false;
   }
@@ -172,13 +145,13 @@ const onSubmit = async (cwd: string) => {
       <div class="terminals">
         <template v-for="id in openedIds" :key="id">
           <TerminalView
-            :ref="registerTerminal(id)"
+            :ref="register('agent', id)"
             :session-id="id"
             :visible="id === selectedId"
           />
           <TerminalView
             v-if="shellOpenIds.has(id)"
-            :ref="registerShell(id)"
+            :ref="register('shell', id)"
             :session-id="id"
             kind="shell"
             :visible="id === selectedId"
@@ -255,7 +228,6 @@ const onSubmit = async (cwd: string) => {
 .split:hover {
   background: var(--bg-control-hover);
 }
-/* 開いている間は押した状態に見せる。 */
 .split.active {
   background: var(--bg-control-hover);
   color: var(--text-strong);
@@ -287,7 +259,6 @@ const onSubmit = async (cwd: string) => {
   pointer-events: none;
   animation: scale-toast-fade 1s ease forwards;
 }
-/* 消える直前まで読める濃さを保ち、最後だけ薄くする。 */
 @keyframes scale-toast-fade {
   0%,
   70% {

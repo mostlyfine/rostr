@@ -33,6 +33,16 @@ export const buildHookSettings = (notifyScriptPath: string): HookSettings => {
   return { hooks };
 };
 
-/** 設定を一時ファイルへ書き出し、そのパスを返す。 */
-export const writeHookSettings = (sessionId: string, notifyScriptPath: string): string =>
-  writeSettingsFile(`${sessionId}.json`, JSON.stringify(buildHookSettings(notifyScriptPath), null, 2));
+let settingsPath: string | undefined;
+
+/**
+ * 設定を一時ファイルへ書き出し、そのパスを返す。
+ * 中身は notifyScriptPath と node の場所しか見ておらずセッションごとに違わないので、
+ * 1 本を共有する。セッションごとに書いていた頃は、終了時に消す口が無いまま
+ * 一時ディレクトリへ同じ内容のファイルが際限なく溜まっていた。
+ */
+export const writeHookSettings = (notifyScriptPath: string): string =>
+  (settingsPath ??= writeSettingsFile(
+    "hooks.json",
+    JSON.stringify(buildHookSettings(notifyScriptPath), null, 2),
+  ));
