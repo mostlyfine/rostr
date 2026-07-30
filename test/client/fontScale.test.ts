@@ -1,35 +1,20 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mount } from "@vue/test-utils";
+import { nextTick } from "vue";
 import {
   DEFAULT_SCALE,
   FONT_SCALE_KEY,
   MAX_SCALE,
   MIN_SCALE,
-  clampScale,
   loadFontScale,
   nextFontScale,
   saveFontScale,
   terminalFontSize,
 } from "../../src/fontScale";
-import type { Session } from "../../common/types";
 
 beforeEach(() => {
   localStorage.clear();
-});
-
-describe("clampScale", () => {
-  it("範囲外は上下限に丸める", () => {
-    expect(clampScale(MIN_SCALE - 10)).toBe(MIN_SCALE);
-    expect(clampScale(MAX_SCALE + 10)).toBe(MAX_SCALE);
-  });
-
-  it("範囲内はそのまま返す", () => {
-    expect(clampScale(120)).toBe(120);
-  });
-
-  it("数値でない値は既定に倒す", () => {
-    expect(clampScale(Number.NaN)).toBe(DEFAULT_SCALE);
-  });
 });
 
 describe("loadFontScale", () => {
@@ -87,17 +72,28 @@ describe("terminalFontSize", () => {
 });
 
 /**
- * useFontScale はモジュールスコープに状態を持つシングルトンなので、テストごとに
- * vi.resetModules() で作り直し、Sidebar も新しいインスタンスを掴むよう動的 import する。
+ * 描画前に倍率を確定させるスクリプトはモジュールを import できないので、保存キーだけを
+ * index.html に書き写している。ずれると保存済みの倍率が読まれず、このスクリプトが防いで
+ * いるちらつきそのものが起きるので、写し間違いをここで止める。
  */
-const mountSidebar = async () => {
-  const Sidebar = (await import("../../src/components/Sidebar.vue")).default;
-  return mount(Sidebar, { props: { sessions: [] as Session[], selectedId: null } });
-};
+describe("index.html の先読みスクリプト", () => {
+  // jsdom 環境では import.meta.url が http なので、vitest の root から辿る。
+  const html = readFileSync(resolve(process.cwd(), "index.html"), "utf8");
+
+  it("fontScale.ts と同じ保存キーを読む", () => {
+    expect(html).toContain(`localStorage.getItem("${FONT_SCALE_KEY}")`);
+  });
+});
+
+/**
+ * useFontScale はモジュールスコープに状態を持つシングルトンなので、テストごとに
+ * vi.resetModules() で作り直してから動的 import する。
+ */
+const freshFontScale = async () => (await import("../../src/composables/useFontScale")).useFontScale();
 
 const currentScale = () => document.documentElement.style.getPropertyValue("--font-scale");
 
-describe("フォントサイズのボタン", () => {
+describe("useFontScale", () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -107,42 +103,52 @@ describe("フォントサイズのボタン", () => {
   });
 
   it("既定では等倍を適用する", async () => {
-    await mountSidebar();
+    await freshFontScale();
     expect(currentScale()).toBe("1");
-  });
-
-  it("+ を押すと拡大し、選択を保存する", async () => {
-    const wrapper = await mountSidebar();
-
-    await wrapper.find("[data-test=font-increase]").trigger("click");
-    expect(currentScale()).toBe("1.1");
-    expect(localStorage.getItem(FONT_SCALE_KEY)).toBe("110");
-  });
-
-  it("- を押すと縮小し、選択を保存する", async () => {
-    const wrapper = await mountSidebar();
-
-    await wrapper.find("[data-test=font-decrease]").trigger("click");
-    expect(currentScale()).toBe("0.9");
-    expect(localStorage.getItem(FONT_SCALE_KEY)).toBe("90");
   });
 
   it("保存済みの倍率を反映する", async () => {
     localStorage.setItem(FONT_SCALE_KEY, "130");
-    await mountSidebar();
+    await freshFontScale();
     expect(currentScale()).toBe("1.3");
   });
 
-  it("上限では + を、下限では - を押せなくする", async () => {
-    localStorage.setItem(FONT_SCALE_KEY, String(MAX_SCALE));
-    const atMax = await mountSidebar();
-    expect(atMax.find("[data-test=font-increase]").attributes("disabled")).toBeDefined();
-    expect(atMax.find("[data-test=font-decrease]").attributes("disabled")).toBeUndefined();
+  it("拡大すると倍率を上げ、選択を保存する", async () => {
+    const { increase } = await freshFontScale();
 
-    vi.resetModules();
-    localStorage.setItem(FONT_SCALE_KEY, String(MIN_SCALE));
-    const atMin = await mountSidebar();
-    expect(atMin.find("[data-test=font-decrease]").attributes("disabled")).toBeDefined();
-    expect(atMin.find("[data-test=font-increase]").attributes("disabled")).toBeUndefined();
+    increase();
+    await nextTick();
+    expect(currentScale()).toBe("1.1");
+    expect(localStorage.getItem(FONT_SCALE_KEY)).toBe("110");
+  });
+
+  it("縮小すると倍率を下げ、選択を保存する", async () => {
+    const { decrease } = await freshFontScale();
+
+    decrease();
+    await nextTick();
+    expect(currentScale()).toBe("0.9");
+    expect(localStorage.getItem(FONT_SCALE_KEY)).toBe("90");
+  });
+
+  it("リセットすると等倍に戻し、選択を保存する", async () => {
+    localStorage.setItem(FONT_SCALE_KEY, "140");
+    const { reset } = await freshFontScale();
+
+    reset();
+    await nextTick();
+    expect(currentScale()).toBe("1");
+    expect(localStorage.getItem(FONT_SCALE_KEY)).toBe(String(DEFAULT_SCALE));
+  });
+
+  /** 上下限に張り付いた状態で押し続けても書き込まない。clamp 自体は nextFontScale の担当。 */
+  it("倍率が変わらないときは保存しない", async () => {
+    localStorage.setItem(FONT_SCALE_KEY, String(MAX_SCALE));
+    const { increase, scale } = await freshFontScale();
+    localStorage.removeItem(FONT_SCALE_KEY);
+
+    increase();
+    expect(scale.value).toBe(MAX_SCALE);
+    expect(localStorage.getItem(FONT_SCALE_KEY)).toBeNull();
   });
 });

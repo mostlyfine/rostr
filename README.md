@@ -108,6 +108,14 @@ Scrolling the wheel up in the terminal moves back through earlier output.
 
 Press `Shift+Enter` to insert a newline instead of submitting the prompt. In a browser the key would otherwise reach the agent as a plain Enter, so the terminal sends the `ESC` + `CR` sequence that `claude`'s own `/terminal-setup` configures for iTerm2 and VS Code. Plain `Enter` still submits.
 
+### Changing the font size
+
+Press `Cmd+Shift+ +` / `Cmd+Shift+ -` (`Ctrl` elsewhere) to scale every font — the sidebar, the dialogs, and the terminals — between 80% and 160% in steps of 10. `Cmd+Shift+0` goes back to 100%. The new size is shown briefly at the bottom of the screen and remembered in `localStorage`.
+
+- `Shift` is part of every binding on purpose: the browser's own zoom is `Cmd` and `+` / `-` without it, and that keeps working as usual.
+- The keys are caught before xterm.js sees them, so nothing reaches the agent or the shell.
+- Terminals are resized to match, so the agent is told the new number of columns and rows.
+
 ### Process persistence with tmux
 
 With tmux, agents keep running whether you stop the server or it crashes. On the next start, sessions whose names begin with `rostr-` are picked up from `tmux list-sessions`, re-attached, and put back in the list.

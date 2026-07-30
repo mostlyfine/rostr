@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { createTerminalOptions } from "../../src/terminalOptions";
-import { terminalFontSize } from "../../src/fontScale";
 import { XTERM_THEMES } from "../../src/theme";
 
 describe("createTerminalOptions", () => {
@@ -19,7 +18,6 @@ describe("createTerminalOptions", () => {
   });
 
   it("渡した倍率をフォントサイズに反映する", () => {
-    expect(createTerminalOptions("dark", 100).fontSize).toBe(terminalFontSize(100));
-    expect(createTerminalOptions("dark", 150).fontSize).toBe(terminalFontSize(150));
+    expect(createTerminalOptions("dark", 150).fontSize).toBe(24);
   });
 });

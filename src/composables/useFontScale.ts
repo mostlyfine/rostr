@@ -1,14 +1,8 @@
-import { computed, ref, watchEffect } from "vue";
-import {
-  MAX_SCALE,
-  MIN_SCALE,
-  loadFontScale,
-  nextFontScale,
-  saveFontScale,
-} from "../fontScale";
+import { ref, watchEffect } from "vue";
+import { DEFAULT_SCALE, loadFontScale, nextFontScale, saveFontScale } from "../fontScale";
 
 /**
- * サイドバーのボタンと、開いている全ターミナルが同じ倍率を見る必要があるので、
+ * ショートカットを受けるところと、開いている全ターミナルが同じ倍率を見る必要があるので、
  * 状態はモジュールスコープに置いて useFontScale() の呼び出し間で共有する。
  */
 const scale = ref<number>(loadFontScale());
@@ -19,21 +13,17 @@ watchEffect(() => {
 });
 
 export const useFontScale = () => {
-  const canIncrease = computed(() => scale.value < MAX_SCALE);
-  const canDecrease = computed(() => scale.value > MIN_SCALE);
-  const label = computed(() => `Font size: ${scale.value}%`);
-
-  const step = (direction: 1 | -1) => {
-    scale.value = nextFontScale(scale.value, direction);
-    saveFontScale(scale.value);
+  // 上下限に張り付いた状態で押し続けても、同じ値を localStorage へ書き直さない。
+  const apply = (percent: number) => {
+    if (percent === scale.value) return;
+    scale.value = percent;
+    saveFontScale(percent);
   };
 
   return {
     scale,
-    canIncrease,
-    canDecrease,
-    label,
-    increase: () => step(1),
-    decrease: () => step(-1),
+    increase: () => apply(nextFontScale(scale.value, 1)),
+    decrease: () => apply(nextFontScale(scale.value, -1)),
+    reset: () => apply(DEFAULT_SCALE),
   };
 };

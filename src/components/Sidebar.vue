@@ -3,7 +3,6 @@ import { computed } from "vue";
 import type { Session } from "../../common/types";
 import { toSidebarRows } from "../sessionGroups";
 import { useTheme } from "../composables/useTheme";
-import { useFontScale } from "../composables/useFontScale";
 import SessionItem from "./SessionItem.vue";
 
 const props = defineProps<{ sessions: Session[]; selectedId: string | null }>();
@@ -11,13 +10,6 @@ const emit = defineEmits<{ select: [id: string]; close: [id: string]; create: []
 
 const rows = computed(() => toSidebarRows(props.sessions));
 const { label: themeLabel, toggle: toggleTheme } = useTheme();
-const {
-  label: fontScaleLabel,
-  canIncrease,
-  canDecrease,
-  increase: increaseFont,
-  decrease: decreaseFont,
-} = useFontScale();
 </script>
 
 <template>
@@ -25,24 +17,6 @@ const {
     <header class="header">
       <h1>rostr</h1>
       <div class="actions">
-        <button
-          class="font"
-          data-test="font-decrease"
-          :title="fontScaleLabel"
-          :disabled="!canDecrease"
-          @click="decreaseFont()"
-        >
-          −
-        </button>
-        <button
-          class="font"
-          data-test="font-increase"
-          :title="fontScaleLabel"
-          :disabled="!canIncrease"
-          @click="increaseFont()"
-        >
-          ＋
-        </button>
         <button
           class="theme"
           data-test="theme-toggle"
@@ -107,8 +81,7 @@ h1 {
   gap: 6px;
 }
 .new,
-.theme,
-.font {
+.theme {
   border: 1px solid var(--border-control);
   background: var(--bg-control);
   color: var(--text);
@@ -118,21 +91,13 @@ h1 {
   cursor: pointer;
 }
 .new:hover,
-.theme:hover,
-.font:not(:disabled):hover {
+.theme:hover {
   background: var(--bg-control-hover);
 }
-/* 1文字のボタンなので、+ 新規 と高さを揃えつつ左右を詰める。 */
-.theme,
-.font {
+/* 絵文字1文字なので、+ New と高さを揃えつつ左右を詰める。 */
+.theme {
   padding: 4px 7px;
   line-height: 1.35;
-}
-/* 上下限。押しても何も起きないことを見て分かるようにする。 */
-.font:disabled {
-  color: var(--text-muted);
-  border-color: var(--border);
-  cursor: default;
 }
 .list {
   flex: 1;

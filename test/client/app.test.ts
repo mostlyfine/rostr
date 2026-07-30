@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
-import { mount } from "@vue/test-utils";
+import { type VueWrapper, mount } from "@vue/test-utils";
 import type { SessionView } from "../../common/types";
+import { FONT_SCALE_KEY } from "../../src/fontScale";
 
 const focusSpy = vi.fn();
 let hasFocusReturn = false;
@@ -267,5 +268,75 @@ describe("waiting/done への自動フォーカス", () => {
     await nextTick();
 
     expect(focusSpy).toHaveBeenCalledWith("b");
+  });
+});
+
+describe("フォントサイズのショートカット", () => {
+  /** 画面の中から押された状況を作る。capture で拾えていれば xterm へ届く前に止まる。 */
+  const press = (over: Partial<KeyboardEventInit>) => {
+    const event = new KeyboardEvent("keydown", {
+      metaKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+      ...over,
+    });
+    document.body.dispatchEvent(event);
+    return event;
+  };
+
+  const toast = (wrapper: VueWrapper) => wrapper.find("[data-test=font-scale-toast]");
+
+  beforeEach(() => {
+    // useFontScale はモジュールスコープに倍率を持つので、テストごとに作り直す。
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    document.documentElement.style.removeProperty("--font-scale");
+  });
+
+  /**
+   * キーの読み分けは fontScaleKeys の、倍率の保存は useFontScale のテストが見ている。
+   * ここで確かめるのは、capture で拾った操作が倍率へ繋がっていることだけ。
+   */
+  it("押されたショートカットを倍率に繋ぐ", async () => {
+    await mountApp([session({ id: "a" })]);
+
+    press({ key: "+", code: "Equal" });
+    await nextTick();
+
+    expect(document.documentElement.style.getPropertyValue("--font-scale")).toBe("1.1");
+  });
+
+  /** xterm へ渡すとシェルに文字が入ってしまうので、受けたキーはここで止める。 */
+  it("受け取ったキーだけを止め、ブラウザのズームは通す", async () => {
+    await mountApp([session({ id: "a" })]);
+
+    expect(press({ key: "+", code: "Equal" }).defaultPrevented).toBe(true);
+    expect(press({ key: "=", code: "Equal", shiftKey: false }).defaultPrevented).toBe(false);
+  });
+
+  it("倍率を表示し、フェードが終わったら消す", async () => {
+    const wrapper = await mountApp([session({ id: "a" })]);
+
+    press({ key: "+", code: "Equal" });
+    await nextTick();
+    expect(toast(wrapper).text()).toBe("110%");
+
+    // jsdom は CSS アニメーションを走らせないので、終了を自分で伝える。
+    await toast(wrapper).trigger("animationend");
+    expect(toast(wrapper).exists()).toBe(false);
+  });
+
+  /** 上下限で頭打ちになったことは、同じ値がもう一度光ることで分かる。 */
+  it("上限に達していても倍率を表示する", async () => {
+    localStorage.setItem(FONT_SCALE_KEY, "160");
+    const wrapper = await mountApp([session({ id: "a" })]);
+
+    press({ key: "+", code: "Equal" });
+    await nextTick();
+
+    expect(toast(wrapper).text()).toBe("160%");
   });
 });

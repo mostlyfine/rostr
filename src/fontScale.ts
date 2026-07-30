@@ -7,13 +7,13 @@ export const FONT_SCALE_KEY = "rostr:font-scale";
 export const DEFAULT_SCALE = 100;
 export const MIN_SCALE = 80;
 export const MAX_SCALE = 160;
-export const SCALE_STEP = 10;
+const SCALE_STEP = 10;
 
 /** ターミナルの等倍サイズ。UI 側の px と違い CSS では持てないので JS に置く。 */
-export const BASE_TERMINAL_FONT_SIZE = 16;
+const BASE_TERMINAL_FONT_SIZE = 16;
 
 /** 倍率を扱える範囲に収める。数値でないものは既定に倒す。 */
-export const clampScale = (percent: number): number => {
+const clampScale = (percent: number): number => {
   if (!Number.isFinite(percent)) return DEFAULT_SCALE;
   return Math.min(MAX_SCALE, Math.max(MIN_SCALE, percent));
 };

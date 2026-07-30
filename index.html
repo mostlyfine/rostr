@@ -18,10 +18,11 @@
           document.documentElement.dataset.theme = "dark";
         }
         try {
+          // 範囲の判定は持たない。おかしな値が入っていても useFontScale が直後に直す。
           var scale = parseInt(localStorage.getItem("rostr:font-scale"), 10);
-          if (!isFinite(scale)) scale = 100;
-          scale = Math.min(160, Math.max(80, scale));
-          document.documentElement.style.setProperty("--font-scale", String(scale / 100));
+          if (isFinite(scale)) {
+            document.documentElement.style.setProperty("--font-scale", String(scale / 100));
+          }
         } catch (e) {
           // 読めなければ style.css の既定（等倍）のまま描く。
         }
