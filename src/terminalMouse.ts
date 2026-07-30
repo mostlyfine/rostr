@@ -10,6 +10,7 @@
  * 知らないので、送りつけたシーケンスはそのまま copy-mode の入口として解釈される。
  */
 import type { Terminal } from "@xterm/xterm";
+import { clamp } from "./clamp";
 
 /**
  * 報告の符号化ではなく、報告そのものの有無を決めるモード。
@@ -26,9 +27,6 @@ export const MOUSE_REPORT_MODES = new Set([...MOUSE_PROTOCOL_MODES, 1005, 1006, 
 
 /** 1 回のホイールイベントで送る最大行数。トラックパッドの慣性で走りすぎないための蓋。 */
 export const MAX_WHEEL_LINES_PER_EVENT = 20;
-
-const clamp = (value: number, min: number, max: number): number =>
-  Math.max(min, Math.min(max, value));
 
 /**
  * CSI ? Pm h / l のパラメータを見て、xterm に渡さず握り潰すべきかを返す。

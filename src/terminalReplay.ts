@@ -24,14 +24,14 @@ export const createReplayGate = (term: Terminal): ReplayGate => {
   return {
     shouldSuppress: () => replaying,
     write(data: string): Promise<void> {
-      if (!isFirstMessage) {
-        return new Promise((resolve) => term.write(data, resolve));
-      }
+      // replay かどうかは呼ばれた時点で決まる。ここでローカルに退避しないと、
+      // 1 通目の書き込み中に 2 通目が届いたときに抑止が早く解けてしまう。
+      const isReplay = isFirstMessage;
       isFirstMessage = false;
-      replaying = true;
+      if (isReplay) replaying = true;
       return new Promise((resolve) => {
         term.write(data, () => {
-          replaying = false;
+          if (isReplay) replaying = false;
           resolve();
         });
       });

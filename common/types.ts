@@ -54,6 +54,18 @@ export interface HookEvent {
   [key: string]: unknown;
 }
 
+/**
+ * ターミナルのペイン種別。クライアントは WebSocket のクエリに載せ、サーバはそれで
+ * どちらの SessionManager へ繋ぐかを決める。両側が合意する語彙なのでここに置く。
+ */
+export type PaneKind = "agent" | "shell";
+
+/** ペイン種別を載せる WebSocket のクエリパラメータ名。 */
+export const PANE_KIND_PARAM = "kind";
+
+export const isPaneKind = (value: unknown): value is PaneKind =>
+  value === "agent" || value === "shell";
+
 /** クライアント → サーバの WebSocket メッセージ。 */
 export type ClientMessage =
   | { type: "input"; data: string }

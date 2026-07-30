@@ -4,7 +4,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
-import type { ClientMessage } from "../../common/types";
+import { PANE_KIND_PARAM, type ClientMessage, type PaneKind } from "../../common/types";
 import { XTERM_THEMES } from "../theme";
 import { createTerminalOptions } from "../terminalOptions";
 import { SHIFT_ENTER_INPUT, isShiftEnter } from "../terminalKeys";
@@ -20,10 +20,9 @@ import { useTheme } from "../composables/useTheme";
 import { useFontScale } from "../composables/useFontScale";
 
 /** shell はスプリットで開くシェル。id は claude のセッションと共有し、繋ぐ先だけが違う。 */
-const props = withDefaults(
-  defineProps<{ sessionId: string; visible: boolean; kind?: "agent" | "shell" }>(),
-  { kind: "agent" },
-);
+const props = withDefaults(defineProps<{ sessionId: string; visible: boolean; kind?: PaneKind }>(), {
+  kind: "agent",
+});
 
 const { theme: currentTheme } = useTheme();
 const { scale: fontScale } = useFontScale();
@@ -135,7 +134,7 @@ onMounted(() => {
   });
 
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const kind = props.kind === "shell" ? "&kind=shell" : "";
+  const kind = `&${PANE_KIND_PARAM}=${props.kind}`;
   socket = new WebSocket(`${protocol}//${location.host}/ws?session=${props.sessionId}${kind}`);
   // サーバは接続直後にスクロールバックを、その後は PTY の出力をそのまま送ってくる。
   socket.onmessage = (event) => void replayGate.write(event.data as string);
