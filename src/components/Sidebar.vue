@@ -55,7 +55,8 @@ const { label: themeLabel, toggle: toggleTheme } = useTheme();
 
 <style scoped>
 .sidebar {
-  width: 320px;
+  /* 文字だけ大きくすると幅が足りずセッション名が読めなくなるので、幅も倍率に追従させる。 */
+  width: calc(320px * var(--font-scale));
   flex: none;
   display: flex;
   flex-direction: column;
@@ -71,7 +72,7 @@ const { label: themeLabel, toggle: toggleTheme } = useTheme();
 }
 h1 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-lg);
   color: var(--text-strong);
 }
 .actions {
@@ -84,7 +85,7 @@ h1 {
   border: 1px solid var(--border-control);
   background: var(--bg-control);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   padding: 4px 10px;
   border-radius: 5px;
   cursor: pointer;
@@ -93,7 +94,7 @@ h1 {
 .theme:hover {
   background: var(--bg-control-hover);
 }
-/* 絵文字1文字なので、+ 新規 と高さを揃えつつ左右を詰める。 */
+/* 絵文字1文字なので、+ New と高さを揃えつつ左右を詰める。 */
 .theme {
   padding: 4px 7px;
   line-height: 1.35;
@@ -105,7 +106,7 @@ h1 {
 }
 .empty {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.6;
   padding: 8px;
 }
@@ -114,7 +115,7 @@ h1 {
   align-items: center;
   gap: 6px;
   padding: 2px 4px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-tertiary);
@@ -127,7 +128,7 @@ h1 {
   color: var(--text-secondary);
   border-radius: 8px;
   padding: 0 6px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 /*
  * 見出しの状態を色でも分かるようにする。文字ではなくバッジを塗るのは、13px の見出しに

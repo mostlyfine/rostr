@@ -89,14 +89,14 @@ const select = () => {
   white-space: nowrap;
 }
 .title {
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text-strong);
 }
 /* 一覧で最初に目に入ってほしいのはここなので、プロンプトより濃く出す。 */
 .summary {
   margin: 3px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text-strong);
 }
 .dot {
@@ -151,7 +151,7 @@ const select = () => {
 }
 .prompt {
   margin: 3px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -166,7 +166,7 @@ const select = () => {
 }
 .activity {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-tertiary);
 }
 .close {
@@ -174,7 +174,7 @@ const select = () => {
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 17px;
+  font-size: var(--fs-xl);
   line-height: 1;
   padding: 2px 5px;
   border-radius: 4px;

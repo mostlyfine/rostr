@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>rostr</title>
     <!--
-      Vue のマウントを待つと、light を選んでいる人に一瞬ダークが見えてしまう。
-      描画前にここで data-theme を確定させる。判定は src/composables/useTheme.ts と同じ。
+      Vue のマウントを待つと、light を選んでいる人に一瞬ダークが見えてしまう。文字サイズも
+      同じで、拡大している人には一瞬小さい文字が見える。描画前にここで両方を確定させる。
+      判定は src/composables/useTheme.ts と src/fontScale.ts に合わせること。
     -->
     <script>
       (function () {
@@ -15,6 +16,15 @@
             localStorage.getItem("rostr:theme") === "light" ? "light" : "dark";
         } catch (e) {
           document.documentElement.dataset.theme = "dark";
+        }
+        try {
+          // 範囲の判定は持たない。おかしな値が入っていても useFontScale が直後に直す。
+          var scale = parseInt(localStorage.getItem("rostr:font-scale"), 10);
+          if (isFinite(scale)) {
+            document.documentElement.style.setProperty("--font-scale", String(scale / 100));
+          }
+        } catch (e) {
+          // 読めなければ style.css の既定（等倍）のまま描く。
         }
       })();
     </script>

@@ -64,7 +64,8 @@ const onSubmit = () => {
   justify-content: center;
 }
 .dialog {
-  width: 480px;
+  /* 中の文字が倍率で伸びるので、箱も追従させないとパスが読めなくなる（Sidebar と同じ理由）。 */
+  width: calc(480px * var(--font-scale));
   max-width: 90vw;
   background: var(--bg-surface);
   border: 1px solid var(--border-strong);
@@ -76,14 +77,14 @@ const onSubmit = () => {
 }
 h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-lg);
   color: var(--text-strong);
 }
 label {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-secondary);
 }
 input {
@@ -92,7 +93,7 @@ input {
   border-radius: 6px;
   padding: 8px 10px;
   color: var(--text-strong);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
 input:focus {
@@ -103,11 +104,12 @@ input:focus {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  max-height: 180px;
+  /* 倍率に追従させて、拡大しても見える履歴の件数が変わらないようにする。 */
+  max-height: calc(180px * var(--font-scale));
   overflow-y: auto;
 }
 .recent-label {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--text-muted);
 }
 .recent-item {
@@ -115,7 +117,7 @@ input:focus {
   background: transparent;
   border: none;
   color: var(--text-link);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-family: ui-monospace, SFMono-Regular, monospace;
   padding: 3px 6px;
   border-radius: 4px;
@@ -126,7 +128,7 @@ input:focus {
 }
 .error {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-danger);
 }
 .actions {
@@ -138,7 +140,7 @@ input:focus {
   border: 1px solid var(--border-control);
   background: var(--bg-control);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 6px 14px;
   border-radius: 6px;
   cursor: pointer;

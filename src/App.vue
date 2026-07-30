@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar.vue";
 import NewSessionDialog from "./components/NewSessionDialog.vue";
 import TerminalView from "./components/TerminalView.vue";
 import { useSessions } from "./composables/useSessions";
+import { useFontScaleShortcut } from "./composables/useFontScaleShortcut";
 import { rememberRecentDir } from "./recentDirs";
 import { NOTABLE_STATES } from "./sessionGroups";
 import type { AgentState, Session } from "../common/types";
@@ -120,6 +121,8 @@ watch(sessions, (list) => {
   }
 });
 
+const { scale: fontScale, shown: shownScale, dismiss: dismissScale } = useFontScaleShortcut();
+
 const openDialog = () => {
   dialogError.value = null;
   dialogOpen.value = true;
@@ -194,6 +197,17 @@ const onSubmit = async (cwd: string) => {
       @submit="onSubmit"
       @cancel="dialogOpen = false"
     />
+
+    <!-- 消えるまでの時間は CSS のアニメーションが持つ。終わりを受けて要素を落とす。 -->
+    <div
+      v-if="shownScale !== null"
+      :key="shownScale"
+      class="scale-toast"
+      data-test="font-scale-toast"
+      @animationend="dismissScale()"
+    >
+      {{ fontScale }}%
+    </div>
   </div>
 </template>
 
@@ -218,12 +232,12 @@ const onSubmit = async (cwd: string) => {
   border-bottom: 1px solid var(--border);
 }
 .main-title {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-strong);
 }
 .main-cwd {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
@@ -232,7 +246,7 @@ const onSubmit = async (cwd: string) => {
   border: 1px solid var(--border-control);
   background: var(--bg-control);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 2px 8px;
   border-radius: 5px;
   cursor: pointer;
@@ -254,7 +268,33 @@ const onSubmit = async (cwd: string) => {
 }
 .placeholder {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   padding: 24px;
+}
+/* 倍率を変えた直後だけ画面の下に浮かせる。下のターミナルを触れなくしないよう当たり判定は外す。 */
+.scale-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 48px;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-strong);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  animation: scale-toast-fade 1s ease forwards;
+}
+/* 消える直前まで読める濃さを保ち、最後だけ薄くする。 */
+@keyframes scale-toast-fade {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 </style>
