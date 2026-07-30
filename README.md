@@ -144,6 +144,11 @@ tmux -L multi-agent kill-server # ends every one of them
 ## Tests
 
 ```bash
-npm test        # vitest
+npm test          # vitest
+npm run test:e2e  # playwright
 npm run typecheck
 ```
+
+The Playwright suite drives the real browser but never starts the server: the SSE stream, the REST
+endpoints and the WebSocket are all replaced in the page (`test/e2e/fixtures.ts`), so it needs
+neither tmux nor a real agent. Run `npx playwright install chromium` once before the first run.

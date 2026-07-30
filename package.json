@@ -26,6 +26,7 @@
     "stop": "pid=$(lsof -tiTCP:${PORT:-8787} -sTCP:LISTEN) && kill $pid && echo \"stopped rostr server (pid $pid)\" || echo \"no rostr server listening on port ${PORT:-8787}\"",
     "typecheck": "vue-tsc -b && tsc -p tsconfig.server.json",
     "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
+    "test:e2e": "playwright test",
     "tmux:kill": "tmux -L rostr kill-server 2>/dev/null || true",
     "postinstall": "node scripts/fix-pty-perms.js"
   },
@@ -40,6 +41,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
     "@types/supertest": "^6.0.2",
