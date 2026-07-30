@@ -3,13 +3,9 @@ import { readFile } from "node:fs/promises";
 import { truncate } from "./text";
 import { parseRecentTurns, type ConversationTurn } from "./transcript";
 
-/** 要約に渡す直近のユーザー発言数。 */
 const USER_TURN_WINDOW = 5;
-/** ユーザー発言1件あたりの文字数上限。 */
 const USER_TURN_CHARS = 600;
-/** アシスタント発言1件あたりの文字数上限。 */
 const ASSISTANT_TURN_CHARS = 160;
-/** サイドバーに出す要約の文字数上限。 */
 export const MAX_SUMMARY_CHARS = 80;
 
 /** claude -p に渡す指示。会話そのものは stdin から流す。 */
@@ -39,7 +35,6 @@ export const renderTurns = (turns: ConversationTurn[]): string => {
   return lines.join("\n");
 };
 
-/** モデルの出力をサイドバーに出せる1行に整える。 */
 export const sanitizeSummary = (raw: string): string => {
   const firstLine =
     raw
@@ -177,7 +172,6 @@ export const runClaudeHeadless =
       child.stdin.end(stdin);
     });
 
-/** 会話 JSONL を読む既定の実装。 */
 export const readTranscriptFile = (path: string): Promise<string> => readFile(path, "utf8");
 
 export interface SummarizerFromEnv {

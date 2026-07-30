@@ -26,14 +26,12 @@ export interface ApiCall {
 export interface ApiOverrides {
   /** POST /api/sessions を失敗させる。ここに入れた文字列がそのままダイアログに出る。 */
   createError?: string;
-  /** POST /api/sessions が返す Session。 */
   created?: Partial<Session>;
 }
 
 export interface Backend {
   /** SSE の 1 フレームを配る。サーバが一覧を配り直した状況になる。 */
   push(sessions: SessionView[]): Promise<void>;
-  /** ここまでに飛んだ REST 呼び出し。 */
   calls: ApiCall[];
   /** ブラウザが WebSocket へ送ったメッセージ。 */
   wsSent: string[];
@@ -128,7 +126,6 @@ export const mockBackend = async (page: Page, overrides: ApiOverrides = {}): Pro
   return { push, calls, wsSent, wsSend: (data: string) => wsSend(data) };
 };
 
-/** 画面を開き、最初の一覧を配るところまでを済ませる。 */
 export const openApp = async (
   page: Page,
   sessions: SessionView[],

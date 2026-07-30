@@ -25,11 +25,9 @@ import {
 export interface SessionManagerOptions {
   /** 起動するバイナリ。既定は claude。テストでは /bin/sh に差し替える。 */
   agentBin: string;
-  /** セッション id から起動引数を組み立てる。 */
   buildArgs: (sessionId: string) => string[];
   /** hook スクリプトが POST する先のポート番号。子プロセスの env に渡す。 */
   port: number;
-  /** 各セッションで保持する出力の文字数上限。 */
   scrollbackChars?: number;
   /** tmux 経由で起動するか。既定は tmux が使えるかどうかで決まる。 */
   tmux?: boolean;
@@ -225,7 +223,6 @@ export class SessionManager {
     return [...this.entries.values()].map((entry) => entry.session);
   }
 
-  /** 接続してきたブラウザに見せる直前までの画面。切り詰めはここで行う。 */
   scrollback(id: string): string {
     const scrollback = this.entries.get(id)?.scrollback ?? "";
     return scrollback.slice(-this.scrollbackChars);
@@ -239,7 +236,6 @@ export class SessionManager {
     return this.entries.get(id)?.modes.replay() ?? "";
   }
 
-  /** PTY へ入力を送る。 */
   write(id: string, data: string): boolean {
     const entry = this.entries.get(id);
     if (!entry) return false;
@@ -254,7 +250,6 @@ export class SessionManager {
     return true;
   }
 
-  /** hook イベントを状態へ反映する。変化があれば change を通知する。 */
   applyHook(id: string, event: HookEvent): boolean {
     const entry = this.entries.get(id);
     if (!entry) return false;
@@ -305,7 +300,6 @@ export class SessionManager {
     this.emitChange();
   }
 
-  /** SIGTERM を送り、猶予を過ぎても残っていれば SIGKILL する。 */
   kill(id: string): boolean {
     const entry = this.entries.get(id);
     if (!entry) return false;
@@ -352,20 +346,17 @@ export class SessionManager {
     }
   }
 
-  /** tmux の設定ファイルは初回に一度だけ書き出す。 */
   private tmuxConf(): string {
     this.tmuxConfPath ??= writeTmuxConf();
     return this.tmuxConfPath;
   }
 
-  /** 動いている tmux サーバへの読み直しは、この設定で一度届けていれば済む。 */
   private ensureTmuxConfLoaded(): void {
     if (this.tmuxConfLoaded) return;
     reloadTmuxConf(this.tmuxSocket, this.tmuxConf());
     this.tmuxConfLoaded = true;
   }
 
-  /** 既存の tmux セッションへ繋ぐクライアントを PTY として起動する。 */
   private attach(name: string): IPty {
     return pty.spawn("tmux", buildAttachArgs(this.tmuxSocket, this.tmuxConf(), name), {
       name: "xterm-256color",
@@ -375,7 +366,6 @@ export class SessionManager {
     });
   }
 
-  /** PTY を出力の配線ごと登録する。直接起動でも tmux クライアントでも扱いは同じ。 */
   private register(session: Session, proc: IPty, tmuxName?: string): void {
     const entry: Entry = {
       session,
@@ -398,7 +388,6 @@ export class SessionManager {
       for (const listener of entry.listeners) listener(data);
     });
 
-    // プロセスが死んだらセッションごと消す。x ボタンでも claude 自身の終了でも同じ。
     proc.onExit(() => this.remove(session.id));
   }
 

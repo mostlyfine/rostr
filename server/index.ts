@@ -43,7 +43,6 @@ const shells = new SessionManager({
 /** ペイン種別ごとの管理者。WebSocket はクエリの kind でこの表を引く。 */
 const managers: Record<PaneKind, SessionManager> = { agent: manager, shell: shells };
 
-// エージェントが終わったら、その脇で開いていたシェルも畳む。
 manager.onChange((removedId) => {
   if (removedId !== undefined) shells.kill(removedId);
 });
@@ -69,7 +68,6 @@ server.on("upgrade", (req, socket, head) => {
   wss.handleUpgrade(req, socket, head, (ws) => attach(ws, target, sessionId));
 });
 
-/** WebSocket と PTY を双方向につなぐ。 */
 const attach = (ws: WebSocket, target: SessionManager, sessionId: string) => {
   // 途中から接続したブラウザにも直前までの画面を見せる。
   // スクロールバックは末尾しか残らず、tmux が attach 直後に一度だけ送る端末モード
@@ -83,7 +81,6 @@ const attach = (ws: WebSocket, target: SessionManager, sessionId: string) => {
     if (ws.readyState === ws.OPEN) ws.send(data);
   });
 
-  // セッションが消えたら接続も閉じる。
   const unsubscribeChange = target.onChange(() => {
     if (!target.get(sessionId)) ws.close();
   });

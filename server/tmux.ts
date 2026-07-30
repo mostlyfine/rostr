@@ -37,7 +37,6 @@ const TMUX_CONF = [
   "",
 ].join("\n");
 
-/** list-sessions から復元に必要な項目だけ取り出す書式。 */
 const LIST_FORMAT = "#{session_name}\t#{session_path}\t#{session_created}";
 
 export interface TmuxSessionInfo {
@@ -77,7 +76,6 @@ export const sessionIdFromName = (
   return id === "" ? undefined : id;
 };
 
-/** 設定を一時ファイルへ書き出し、そのパスを返す。 */
 export const writeTmuxConf = (): string => writeSettingsFile("tmux.conf", TMUX_CONF);
 
 /**
@@ -169,7 +167,6 @@ export const parseListSessions = (
 
 let available: boolean | undefined;
 
-/** tmux が使えるか。ROSTR_TMUX=0 で明示的に無効化できる。 */
 export const isTmuxAvailable = (): boolean => {
   if (process.env.ROSTR_TMUX === "0") return false;
   if (available === undefined) {
@@ -179,7 +176,6 @@ export const isTmuxAvailable = (): boolean => {
   return available;
 };
 
-/** デタッチしたままセッションを起こす。失敗したら理由を添えて投げる。 */
 export const startTmuxSession = (options: NewSessionOptions): void => {
   const result = spawnSync("tmux", buildNewSessionArgs(options), { encoding: "utf8" });
   if (result.status === 0) return;
@@ -211,7 +207,6 @@ export const readTmuxSessionList = (socket: string): string => {
   return result.stdout;
 };
 
-/** 生き残っている rostr のセッションを、指定した前置きのものだけ列挙する。 */
 export const listTmuxSessions = (
   socket: string,
   prefix = AGENT_TMUX_PREFIX,

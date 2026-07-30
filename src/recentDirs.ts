@@ -16,7 +16,6 @@ export const loadRecentDirs = (): string[] => {
   }
 };
 
-/** ディレクトリを履歴の先頭へ入れる。既にあれば重複させず移動する。 */
 export const rememberRecentDir = (dir: string): string[] => {
   const next = [dir, ...loadRecentDirs().filter((entry) => entry !== dir)].slice(0, MAX_RECENT);
   writeStored(RECENT_DIRS_KEY, JSON.stringify(next));

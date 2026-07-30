@@ -61,7 +61,6 @@ export const createApp = (
     res.status(204).end();
   });
 
-  // スプリットで開くシェル。id はセッションと共有し、cwd もセッションのものをそのまま使う。
   app.post("/api/sessions/:id/shell", (req: Request, res: Response) => {
     const id = String(req.params.id);
     const session = manager.get(id);

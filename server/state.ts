@@ -5,10 +5,8 @@ import { oneLine, truncate } from "./text";
 const PROMPT_MAX = 140;
 const ACTIVITY_MAX = 100;
 
-/** 改行と連続空白を潰して1行にし、長ければ省略する。 */
 export const truncateOneLine = (text: string, max = PROMPT_MAX): string => truncate(oneLine(text), max);
 
-/** ツール名と入力から、サイドバーに出す1行のサマリを作る。 */
 export const summarizeTool = (toolName: string, toolInput?: Record<string, unknown>): string => {
   const pick = (key: string): string | undefined => {
     const value = toolInput?.[key];

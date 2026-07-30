@@ -4,7 +4,6 @@ import type { Session, SessionView } from "../../common/types";
 /** 張り直すまでの間隔。サーバの再起動が終わる程度には待ち、人が気づく前には戻る長さ。 */
 const RECONNECT_MS = 1_000;
 
-/** サーバの一覧を SSE で購読し、操作用の API 呼び出しをまとめる。 */
 export const useSessions = () => {
   const sessions = ref<SessionView[]>([]);
   const connected = ref(false);
@@ -45,7 +44,6 @@ export const useSessions = () => {
     source?.close();
   });
 
-  /** 起動に失敗した場合はサーバのエラーメッセージを throw する。 */
   const create = async (cwd: string): Promise<Session> => {
     const res = await fetch("/api/sessions", {
       method: "POST",

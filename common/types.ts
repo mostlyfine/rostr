@@ -60,7 +60,6 @@ export interface HookEvent {
  */
 export type PaneKind = "agent" | "shell";
 
-/** ペイン種別を載せる WebSocket のクエリパラメータ名。 */
 export const PANE_KIND_PARAM = "kind";
 
 export const isPaneKind = (value: unknown): value is PaneKind =>

@@ -14,7 +14,6 @@ export const STATE_LABEL: Record<AgentState, string> = {
   exited: "Exited",
 };
 
-/** サイドバーの1行。見出しとセッションを同じ列に混ぜて並べる。 */
 export type SidebarRow =
   | { kind: "header"; key: string; state: AgentState; label: string; count: number }
   | { kind: "session"; key: string; session: Session };

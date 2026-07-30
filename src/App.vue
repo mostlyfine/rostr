@@ -43,10 +43,7 @@ const register = (kind: PaneKind, id: string) => (instance: unknown) => {
   else panes[kind].delete(id);
 };
 
-/**
- * 選択中セッションの脇にシェルを開く / 閉じる。
- * 開閉の結果は SSE の一覧に載って戻ってくるので、ここでは表示状態を触らない。
- */
+/** 開閉の結果は SSE の一覧に載って戻ってくるので、ここでは表示状態を触らない。 */
 const toggleSplit = async () => {
   const id = selectedId.value;
   if (!id) return;
@@ -59,10 +56,7 @@ const toggleSplit = async () => {
   await openShell(id);
 };
 
-/**
- * サイドバーから選ぶと、そのままキー入力できるようメイン画面へフォーカスを移す。
- * 初回に開いた場合はここで初めてターミナルが生成されるので、描画を待ってから呼ぶ。
- */
+/** 初回に開いた場合はここで初めてターミナルが生成されるので、描画を待ってから呼ぶ。 */
 const select = async (id: string) => {
   selectedId.value = id;
   if (!openedIds.value.includes(id)) openedIds.value.push(id);
@@ -70,10 +64,7 @@ const select = async (id: string) => {
   panes.agent.get(id)?.focus();
 };
 
-/**
- * waiting/done に新しく遷移したセッションを見つけ、いま操作中でなければそこへフォーカスを移す。
- * 選択中のターミナルに実際に入力中（hasFocus）の場合は奪わず、点滅による通知だけに任せる。
- */
+/** 選択中のターミナルに実際に入力中の場合は奪わず、点滅による通知だけに任せる。 */
 const focusNewlyNotable = (list: Session[], previous: Session[]) => {
   const newlyNotable = findNewlyNotable(previous, list, selectedId.value);
   if (!newlyNotable) return;
@@ -82,7 +73,7 @@ const focusNewlyNotable = (list: Session[], previous: Session[]) => {
   if (!selectedIsBusy) select(newlyNotable.id);
 };
 
-/** 押した直後に開いたシェルへフォーカスを移す。描画されるのはこの一覧が届いた後。 */
+/** シェルが描画されるのはこの一覧が届いた後なので、ここまで待ってからフォーカスする。 */
 const focusOpenedShell = async () => {
   const id = pendingShellFocus;
   if (!id || !shellOpenIds.value.has(id)) return;
@@ -91,7 +82,6 @@ const focusOpenedShell = async () => {
   panes.shell.get(id)?.focus();
 };
 
-// 削除されたセッションのターミナルを片付け、選択を別のセッションへ移す。
 watch(sessions, (list, previous) => {
   focusOpenedShell();
   focusNewlyNotable(list, previous);
@@ -238,7 +228,6 @@ const onSubmit = async (cwd: string) => {
 .split:hover {
   background: var(--bg-control-hover);
 }
-/* 開いている間は押した状態に見せる。 */
 .split.active {
   background: var(--bg-control-hover);
   color: var(--text-strong);
@@ -270,7 +259,6 @@ const onSubmit = async (cwd: string) => {
   pointer-events: none;
   animation: scale-toast-fade 1s ease forwards;
 }
-/* 消える直前まで読める濃さを保ち、最後だけ薄くする。 */
 @keyframes scale-toast-fade {
   0%,
   70% {

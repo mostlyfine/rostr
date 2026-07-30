@@ -4,7 +4,6 @@ import { join } from "node:path";
 
 const SETTINGS_DIR_NAME = "rostr-settings";
 
-/** rostr が書き出す一時設定ファイル用のディレクトリへ、内容を書き出してパスを返す。 */
 export const writeSettingsFile = (filename: string, content: string): string => {
   const dir = join(tmpdir(), SETTINGS_DIR_NAME);
   mkdirSync(dir, { recursive: true });

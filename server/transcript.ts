@@ -21,7 +21,6 @@ interface RawRecord {
   message?: { role?: unknown; content?: unknown };
 }
 
-/** assistant レコードの content 配列から text ブロックだけを繋ぐ。 */
 const assistantText = (content: unknown): string => {
   if (!Array.isArray(content)) return "";
   const parts = content
@@ -36,7 +35,6 @@ const assistantText = (content: unknown): string => {
   return oneLine(parts.join(" "));
 };
 
-/** 1レコードを1ターンに変換する。要約に使わないレコードは undefined を返す。 */
 const toTurn = (record: RawRecord): ConversationTurn | undefined => {
   if (record.isSidechain === true || record.isMeta === true) return undefined;
 
@@ -59,7 +57,6 @@ const toTurn = (record: RawRecord): ConversationTurn | undefined => {
   return undefined;
 };
 
-/** 1 行をターンにする。空行と壊れた行は undefined を返す。 */
 const parseLine = (line: string): ConversationTurn | undefined => {
   if (line.trim() === "") return undefined;
   try {
@@ -69,7 +66,6 @@ const parseLine = (line: string): ConversationTurn | undefined => {
   }
 };
 
-/** JSONL 全体をターン列にする。壊れた行は黙って飛ばす。 */
 export const parseTranscript = (jsonl: string): ConversationTurn[] => {
   const turns: ConversationTurn[] = [];
   for (const line of jsonl.split("\n")) {
