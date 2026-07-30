@@ -3,10 +3,15 @@ import { defineComponent, h, nextTick } from "vue";
 import { type VueWrapper, mount } from "@vue/test-utils";
 import type { SessionView } from "../../common/types";
 import { FONT_SCALE_KEY } from "../../src/fontScale";
+import { SOUND_ENABLED_KEY } from "../../src/soundSettings";
 
 const focusSpy = vi.fn();
+const playNotificationSoundMock = vi.fn();
 let hasFocusReturn = false;
 let fetchMock: ReturnType<typeof vi.fn>;
+
+// AudioContext は jsdom に無いので、実際に鳴らす副作用はモックへ差し替える。
+vi.mock("../../src/sound.ts", () => ({ playNotificationSound: playNotificationSoundMock }));
 
 // xterm.js は jsdom で動かないので、ターミナルは focus/hasFocus だけ持つスタブに差し替える。
 vi.mock("../../src/components/TerminalView.vue", () => ({
@@ -65,6 +70,7 @@ const mountApp = async (sessions: SessionView[]) => {
 
 beforeEach(() => {
   focusSpy.mockClear();
+  playNotificationSoundMock.mockClear();
   hasFocusReturn = false;
   FakeEventSource.instances = [];
   vi.stubGlobal("EventSource", FakeEventSource);
@@ -268,6 +274,58 @@ describe("waiting/done への自動フォーカス", () => {
     await nextTick();
 
     expect(focusSpy).toHaveBeenCalledWith("b");
+  });
+});
+
+describe("waiting/done のサウンド通知", () => {
+  beforeEach(() => {
+    // useSoundSettings はモジュールスコープに設定を持つので、テストごとに作り直す。
+    vi.resetModules();
+  });
+
+  it("working から waiting になったら waiting の音を鳴らす", async () => {
+    await mountApp([session({ id: "a", state: "working" })]);
+    playNotificationSoundMock.mockClear();
+
+    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", state: "waiting" })]);
+    await nextTick();
+    await nextTick();
+
+    expect(playNotificationSoundMock).toHaveBeenCalledWith("waiting");
+  });
+
+  it("working から done になったら done の音を鳴らす", async () => {
+    await mountApp([session({ id: "a", state: "working" })]);
+    playNotificationSoundMock.mockClear();
+
+    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", state: "done" })]);
+    await nextTick();
+    await nextTick();
+
+    expect(playNotificationSoundMock).toHaveBeenCalledWith("done");
+  });
+
+  it("working のままなら鳴らさない", async () => {
+    await mountApp([session({ id: "a", state: "idle" })]);
+    playNotificationSoundMock.mockClear();
+
+    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", state: "working" })]);
+    await nextTick();
+    await nextTick();
+
+    expect(playNotificationSoundMock).not.toHaveBeenCalled();
+  });
+
+  it("オフに設定していれば鳴らさない", async () => {
+    localStorage.setItem(SOUND_ENABLED_KEY, "false");
+    await mountApp([session({ id: "a", state: "working" })]);
+    playNotificationSoundMock.mockClear();
+
+    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", state: "done" })]);
+    await nextTick();
+    await nextTick();
+
+    expect(playNotificationSoundMock).not.toHaveBeenCalled();
   });
 });
 

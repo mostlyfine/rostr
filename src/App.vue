@@ -5,8 +5,11 @@ import NewSessionDialog from "./components/NewSessionDialog.vue";
 import TerminalView from "./components/TerminalView.vue";
 import { useSessions } from "./composables/useSessions";
 import { useFontScaleShortcut } from "./composables/useFontScaleShortcut";
+import { useSoundSettings } from "./composables/useSoundSettings";
 import { rememberRecentDir } from "./recentDirs";
 import { NOTABLE_STATES } from "./sessionGroups";
+import { detectNotableTransitions } from "./notableTransitions";
+import { playNotificationSound } from "./sound";
 import type { AgentState, Session } from "../common/types";
 
 const { sessions, create, close, openShell, closeShell } = useSessions();
@@ -38,6 +41,8 @@ const pendingShellFocus = ref<string | null>(null);
 
 /** 直前に見たセッション状態。waiting/done への「遷移」を検知するための基準値。 */
 const prevStates = new Map<string, AgentState>();
+
+const { enabled: soundEnabled } = useSoundSettings();
 
 const registerTerminal = (id: string) => (instance: unknown) => {
   if (instance) terminals.set(id, instance as TerminalHandle);
@@ -95,6 +100,12 @@ const focusNewlyNotable = (list: Session[]) => {
   if (!selectedIsBusy) select(newlyNotable.id);
 };
 
+/** waiting/done に新しく遷移した全セッション分、状態に応じた音を鳴らす。 */
+const playNotableSounds = (list: Session[]) => {
+  if (!soundEnabled.value) return;
+  for (const state of detectNotableTransitions(list, prevStates)) playNotificationSound(state);
+};
+
 /** 押した直後に開いたシェルへフォーカスを移す。描画されるのはこの一覧が届いた後。 */
 const focusOpenedShell = async (list: Session[]) => {
   const id = pendingShellFocus.value;
@@ -110,6 +121,7 @@ const focusOpenedShell = async (list: Session[]) => {
 watch(sessions, (list) => {
   focusOpenedShell(list);
   focusNewlyNotable(list);
+  playNotableSounds(list);
   prevStates.clear();
   for (const session of list) prevStates.set(session.id, session.state);
 

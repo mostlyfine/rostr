@@ -3,6 +3,7 @@ import { computed } from "vue";
 import type { Session } from "../../common/types";
 import { toSidebarRows } from "../sessionGroups";
 import { useTheme } from "../composables/useTheme";
+import { useSoundSettings } from "../composables/useSoundSettings";
 import SessionItem from "./SessionItem.vue";
 
 const props = defineProps<{ sessions: Session[]; selectedId: string | null }>();
@@ -10,6 +11,7 @@ const emit = defineEmits<{ select: [id: string]; close: [id: string]; create: []
 
 const rows = computed(() => toSidebarRows(props.sessions));
 const { label: themeLabel, toggle: toggleTheme } = useTheme();
+const { label: soundLabel, toggle: toggleSound } = useSoundSettings();
 </script>
 
 <template>
@@ -24,6 +26,14 @@ const { label: themeLabel, toggle: toggleTheme } = useTheme();
           @click="toggleTheme()"
         >
           {{ themeLabel.icon }}
+        </button>
+        <button
+          class="sound"
+          data-test="sound-toggle"
+          :title="soundLabel.title"
+          @click="toggleSound()"
+        >
+          {{ soundLabel.icon }}
         </button>
         <button class="new" data-test="new-session" @click="emit('create')">+ New</button>
       </div>
@@ -81,7 +91,8 @@ h1 {
   gap: 6px;
 }
 .new,
-.theme {
+.theme,
+.sound {
   border: 1px solid var(--border-control);
   background: var(--bg-control);
   color: var(--text);
@@ -91,11 +102,13 @@ h1 {
   cursor: pointer;
 }
 .new:hover,
-.theme:hover {
+.theme:hover,
+.sound:hover {
   background: var(--bg-control-hover);
 }
 /* 絵文字1文字なので、+ New と高さを揃えつつ左右を詰める。 */
-.theme {
+.theme,
+.sound {
   padding: 4px 7px;
   line-height: 1.35;
 }
