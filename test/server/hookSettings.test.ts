@@ -1,5 +1,5 @@
 import { readFileSync, rmSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { HOOKED_EVENTS } from "../../common/types";
 import { buildHookSettings, writeHookSettings } from "../../server/hookSettings";
 
@@ -32,14 +32,17 @@ describe("buildHookSettings", () => {
 });
 
 describe("writeHookSettings", () => {
-  it("セッションごとのファイルに JSON を書き出す", () => {
-    const path = writeHookSettings("test-session-id", "/abs/hook-notify.mjs");
-    try {
-      expect(path).toContain("test-session-id");
-      const parsed = JSON.parse(readFileSync(path, "utf8"));
-      expect(parsed.hooks.UserPromptSubmit).toBeDefined();
-    } finally {
-      rmSync(path, { force: true });
-    }
+  afterAll(() => rmSync(writeHookSettings("/abs/hook-notify.mjs"), { force: true }));
+
+  it("共有の 1 ファイルに JSON を書き出す", () => {
+    const path = writeHookSettings("/abs/hook-notify.mjs");
+    expect(path).toContain("hooks.json");
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    expect(parsed.hooks.UserPromptSubmit).toBeDefined();
+  });
+
+  // 中身はセッションに依存しないので、書くのは初回だけでよい。
+  it("二度目以降は書き直さず同じパスを返す", () => {
+    expect(writeHookSettings("/abs/hook-notify.mjs")).toBe(writeHookSettings("/abs/hook-notify.mjs"));
   });
 });

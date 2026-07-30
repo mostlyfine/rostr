@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseTranscript } from "../../server/transcript";
+import { parseRecentTurns, parseTranscript } from "../../server/transcript";
+import { renderTurns } from "../../server/summary";
 
 const line = (value: unknown) => `${JSON.stringify(value)}\n`;
 
@@ -86,5 +87,54 @@ describe("parseTranscript", () => {
 
   it("改行や連続空白は1行に潰す", () => {
     expect(parseTranscript(userText("a\n b  c"))).toEqual([{ role: "user", text: "a b c" }]);
+  });
+});
+
+/**
+ * 要約が使うのは末尾の数ターンだけなので、長い会話でも全行を読まずに済ませる。
+ * 切り出す範囲は renderTurns がウィンドウの先頭に選ぶ位置と一致していなければならない。
+ */
+describe("parseRecentTurns", () => {
+  it("ユーザー発言が指定件数そろうところまでを返す", () => {
+    const jsonl =
+      userText("1") + userText("2") + userText("3") + userText("4") + userText("5");
+
+    expect(parseRecentTurns(jsonl, 3)).toEqual([
+      { role: "user", text: "3" },
+      { role: "user", text: "4" },
+      { role: "user", text: "5" },
+    ]);
+  });
+
+  it("ウィンドウの中のアシスタント発言は順序を保って残す", () => {
+    const jsonl =
+      userText("古い") + assistantText("捨てられる") + userText("新しい") + assistantText("残る");
+
+    expect(parseRecentTurns(jsonl, 1)).toEqual([
+      { role: "user", text: "新しい" },
+      { role: "assistant", text: "残る" },
+    ]);
+  });
+
+  it("件数に満たなければ全体を返す", () => {
+    const jsonl = assistantText("先頭") + userText("唯一");
+
+    expect(parseRecentTurns(jsonl, 5)).toEqual(parseTranscript(jsonl));
+  });
+
+  it("全体を渡したときと同じ要約入力になる", () => {
+    const jsonl =
+      Array.from({ length: 40 }, (_, i) => userText(`u${i}`) + assistantText(`a${i}`)).join("") ;
+
+    expect(renderTurns(parseRecentTurns(jsonl, 5))).toBe(renderTurns(parseTranscript(jsonl)));
+  });
+
+  it("壊れた行は飛ばして遡り続ける", () => {
+    const jsonl = userText("本編") + "{ broken\n" + userText("末尾");
+
+    expect(parseRecentTurns(jsonl, 2)).toEqual([
+      { role: "user", text: "本編" },
+      { role: "user", text: "末尾" },
+    ]);
   });
 });

@@ -200,13 +200,19 @@ export const killTmuxSession = (socket: string, name: string): void => {
   spawnSync("tmux", buildKillArgs(socket, name), { stdio: "ignore" });
 };
 
+/**
+ * list-sessions の生出力。前置きの違う管理者が同じソケットを共有するので、
+ * 問い合わせを 1 回で済ませたい呼び手はこれを取って各自で parse する。
+ */
+export const readTmuxSessionList = (socket: string): string => {
+  const result = spawnSync("tmux", buildListArgs(socket), { encoding: "utf8" });
+  // tmux サーバがまだ無いときは "error connecting to ..." で非ゼロ終了する。0 件として扱う。
+  if (result.status !== 0 || typeof result.stdout !== "string") return "";
+  return result.stdout;
+};
+
 /** 生き残っている rostr のセッションを、指定した前置きのものだけ列挙する。 */
 export const listTmuxSessions = (
   socket: string,
   prefix = AGENT_TMUX_PREFIX,
-): TmuxSessionInfo[] => {
-  const result = spawnSync("tmux", buildListArgs(socket), { encoding: "utf8" });
-  // tmux サーバがまだ無いときは "error connecting to ..." で非ゼロ終了する。0 件として扱う。
-  if (result.status !== 0 || typeof result.stdout !== "string") return [];
-  return parseListSessions(result.stdout, prefix);
-};
+): TmuxSessionInfo[] => parseListSessions(readTmuxSessionList(socket), prefix);

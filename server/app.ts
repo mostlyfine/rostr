@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import express from "express";
 import type { Express, Request, Response } from "express";
+import { errorMessage } from "../common/error";
 import type { HookEvent, SessionView } from "../common/types";
 import type { SessionManager } from "./sessions";
 
@@ -21,6 +22,20 @@ export const createApp = (
   const listView = (): SessionView[] =>
     manager.list().map((session) => ({ ...session, shell: shells.get(session.id) !== undefined }));
 
+  /**
+   * SSE で一覧を待っている接続。変化 1 回につき本文を 1 度だけ組み立てて全員へ配る。
+   * 接続ごとに購読すると、タブの数だけ同じ一覧と JSON を作り直すことになる。
+   */
+  const streams = new Set<Response>();
+  const broadcast = () => {
+    if (streams.size === 0) return;
+    const frame = `data: ${JSON.stringify(listView())}\n\n`;
+    for (const stream of streams) stream.write(frame);
+  };
+  // シェルの開閉も一覧の内容（shell フラグ）を変えるので、両方を購読する。
+  manager.onChange(broadcast);
+  shells.onChange(broadcast);
+
   app.get("/api/sessions", (_req: Request, res: Response) => {
     res.json(listView());
   });
@@ -34,7 +49,7 @@ export const createApp = (
     try {
       res.status(201).json(manager.create(cwd.trim()));
     } catch (error) {
-      res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+      res.status(400).json({ error: errorMessage(error) });
     }
   });
 
@@ -63,7 +78,7 @@ export const createApp = (
       shells.create(session.cwd, id);
       res.status(201).end();
     } catch (error) {
-      res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+      res.status(400).json({ error: errorMessage(error) });
     }
   });
 
@@ -92,19 +107,15 @@ export const createApp = (
       "x-accel-buffering": "no",
     });
 
-    const send = () => res.write(`data: ${JSON.stringify(listView())}\n\n`);
-    send();
+    res.write(`data: ${JSON.stringify(listView())}\n\n`);
+    streams.add(res);
 
-    // シェルの開閉も一覧の内容（shell フラグ）を変えるので、両方を購読する。
-    const unsubscribe = manager.onChange(send);
-    const unsubscribeShells = shells.onChange(send);
     // プロキシに切られないための定期的な空コメント。
     const heartbeat = setInterval(() => res.write(": ping\n\n"), 30_000);
 
     res.on("close", () => {
       clearInterval(heartbeat);
-      unsubscribe();
-      unsubscribeShells();
+      streams.delete(res);
       res.end();
     });
   });

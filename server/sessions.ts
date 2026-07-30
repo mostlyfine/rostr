@@ -4,7 +4,7 @@ import { basename, resolve } from "node:path";
 import pty from "node-pty";
 import type { IPty } from "node-pty";
 import type { HookEvent, Session } from "../common/types";
-import { applyHookEvent } from "./state";
+import { applyHookEvent, type HookOutcome } from "./state";
 import type { Summarizer } from "./summary";
 import { createModeTracker, type ModeTracker } from "./terminalModes";
 import {
@@ -15,6 +15,7 @@ import {
   isTmuxAvailable,
   killTmuxSession,
   listTmuxSessions,
+  parseListSessions,
   reloadTmuxConf,
   startTmuxSession,
   tmuxSessionName,
@@ -41,7 +42,11 @@ export interface SessionManagerOptions {
 }
 
 type OutputListener = (data: string) => void;
-type ChangeListener = () => void;
+/**
+ * 一覧が変わったときの通知。セッションが消えた場合だけその id が入る。
+ * 「消えた」は購読者が一覧を舐め直さないと分からない情報なので、通知そのものに載せる。
+ */
+type ChangeListener = (removedId?: string) => void;
 
 interface Entry {
   session: Session;
@@ -113,6 +118,8 @@ export class SessionManager {
   private readonly tmuxPrefix: string;
   private tmuxConfPath?: string;
   private tmuxConfLoaded = false;
+  /** STRIPPED_ENV_KEYS を落とし終えた env。セッションごとの値だけを上から足して使う。 */
+  private baseEnv?: Record<string, string>;
 
   constructor(private readonly options: SessionManagerOptions) {
     this.scrollbackChars = options.scrollbackChars ?? DEFAULT_SCROLLBACK_CHARS;
@@ -184,10 +191,14 @@ export class SessionManager {
    * 生き残っている tmux セッションを拾い直す。サーバ再起動後に一度だけ呼ぶ。
    * 状態・プロンプト・実行内容は hook 由来なので復元されず、次のイベントで追いつく。
    */
-  recover(): number {
+  recover(listOutput?: string): number {
     if (!this.useTmux) return 0;
 
-    const infos = listTmuxSessions(this.tmuxSocket, this.tmuxPrefix);
+    // 同じソケットを見る管理者が複数あるので、list-sessions は呼び出し側で 1 回だけ取って配れる。
+    const infos =
+      listOutput === undefined
+        ? listTmuxSessions(this.tmuxSocket, this.tmuxPrefix)
+        : parseListSessions(listOutput, this.tmuxPrefix);
     if (infos.length === 0) return 0;
 
     // 古い設定のまま動き続けているサーバにも、今の設定を届けてから繋ぎ直す。
@@ -214,8 +225,10 @@ export class SessionManager {
     return [...this.entries.values()].map((entry) => entry.session);
   }
 
+  /** 接続してきたブラウザに見せる直前までの画面。切り詰めはここで行う。 */
   scrollback(id: string): string {
-    return this.entries.get(id)?.scrollback ?? "";
+    const scrollback = this.entries.get(id)?.scrollback ?? "";
+    return scrollback.slice(-this.scrollbackChars);
   }
 
   /**
@@ -251,37 +264,34 @@ export class SessionManager {
       entry.transcriptPath = event.transcript_path;
     }
 
-    const patch = applyHookEvent(entry.session, event);
-    if (Object.keys(patch).length > 0) {
-      entry.session = { ...entry.session, ...patch, updatedAt: Date.now() };
+    const outcome = applyHookEvent(entry.session, event);
+    if (Object.keys(outcome.patch).length > 0) {
+      entry.session = { ...entry.session, ...outcome.patch, updatedAt: Date.now() };
       this.emitChange();
     }
 
-    this.updateSummary(id, entry, event, patch);
+    this.updateSummary(id, entry, event, outcome);
     return true;
   }
 
   /**
    * 要約の生成をきっかけごとに振り分ける。
-   * 会話が作り直された（= applyHookEvent が summary をリセットした）ら世代を進めて古い結果を
-   * 捨てさせ、ターンが終わったら生成を依頼する。「作り直された」の判定を hook_event_name で
-   * 二重に行わず、applyHookEvent が実際に出したパッチをそのまま使う。
+   * 会話が作り直されたら世代を進めて古い結果を捨てさせ、ターンが終わったら生成を依頼する。
    *
    * UserPromptSubmit は Stop を待たず即座に依頼する。ユーザーの新しい意図をサイドバーに
-   * 早く反映するためだが、バックグラウンドタスク通知の自動投入（applyHookEvent が空パッチを
-   * 返すケース）まで依頼してしまうと無駄な生成が増えるので、実際にパッチが出た場合に限る。
+   * 早く反映するためだが、バックグラウンドタスク通知の自動投入まで依頼してしまうと無駄な
+   * 生成が増えるので、それを除いたことを applyHookEvent が明示してきた場合に限る。
    */
-  private updateSummary(id: string, entry: Entry, event: HookEvent, patch: Partial<Session>): void {
+  private updateSummary(id: string, entry: Entry, event: HookEvent, outcome: HookOutcome): void {
     const summarizer = this.options.summarizer;
     if (!summarizer) return;
 
-    if (patch.summary === "") {
+    if (outcome.conversationReset) {
       summarizer.reset(id);
       return;
     }
     const isStop = event.hook_event_name === "Stop";
-    const isRealUserPrompt = event.hook_event_name === "UserPromptSubmit" && Object.keys(patch).length > 0;
-    if (!isStop && !isRealUserPrompt) return;
+    if (!isStop && !outcome.userIntentChanged) return;
     if (!entry.transcriptPath) return;
 
     summarizer.request(id, entry.transcriptPath, (summary) => this.setSummary(id, summary));
@@ -379,7 +389,12 @@ export class SessionManager {
 
     proc.onData((data) => {
       entry.modes.feed(data);
-      entry.scrollback = (entry.scrollback + data).slice(-this.scrollbackChars);
+      // 出力のたびに上限ちょうどへ切ると、そのたびに上限ぶんの文字列を作り直すことになる。
+      // 上限の 2 倍まで溜めてから落とし、実際の切り詰めは読み出す scrollback() に任せる。
+      entry.scrollback += data;
+      if (entry.scrollback.length > this.scrollbackChars * 2) {
+        entry.scrollback = entry.scrollback.slice(-this.scrollbackChars);
+      }
       for (const listener of entry.listeners) listener(data);
     });
 
@@ -393,14 +408,20 @@ export class SessionManager {
    * tmux 経由の場合はここではなく env(1) 側で渡す（tmux の子は tmux サーバの環境を継ぐため）。
    */
   private buildEnv(sessionId?: string): Record<string, string> {
-    const env = { ...(process.env as Record<string, string>) };
-    for (const key of STRIPPED_ENV_KEYS) delete env[key];
-    for (const key of NESTED_TMUX_ENV_KEYS) delete env[key];
-    if (sessionId) {
-      env.ROSTR_SESSION_ID = sessionId;
-      env.ROSTR_PORT = String(this.options.port);
-    }
-    return env;
+    // process.env の各項目は C++ のアクセサなので、展開は見た目より高い。
+    // 落とすキーは固定なので、削除済みの土台は一度だけ作って使い回す。
+    this.baseEnv ??= (() => {
+      const env = { ...(process.env as Record<string, string>) };
+      for (const key of STRIPPED_ENV_KEYS) delete env[key];
+      for (const key of NESTED_TMUX_ENV_KEYS) delete env[key];
+      return env;
+    })();
+    if (!sessionId) return this.baseEnv;
+    return {
+      ...this.baseEnv,
+      ROSTR_SESSION_ID: sessionId,
+      ROSTR_PORT: String(this.options.port),
+    };
   }
 
   private remove(id: string): void {
@@ -409,10 +430,10 @@ export class SessionManager {
     if (entry.killTimer) clearTimeout(entry.killTimer);
     entry.listeners.clear();
     this.entries.delete(id);
-    this.emitChange();
+    this.emitChange(id);
   }
 
-  private emitChange(): void {
-    for (const listener of this.changeListeners) listener();
+  private emitChange(removedId?: string): void {
+    for (const listener of this.changeListeners) listener(removedId);
   }
 }

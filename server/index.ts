@@ -2,12 +2,12 @@ import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
-import type { ClientMessage } from "../common/types";
+import { PANE_KIND_PARAM, isPaneKind, type ClientMessage, type PaneKind } from "../common/types";
 import { createApp } from "./app";
 import { writeHookSettings } from "./hookSettings";
 import { SessionManager } from "./sessions";
 import { createSummarizerFromEnv } from "./summary";
-import { SHELL_TMUX_PREFIX } from "./tmux";
+import { DEFAULT_TMUX_SOCKET, SHELL_TMUX_PREFIX, readTmuxSessionList } from "./tmux";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const notifyScriptPath = join(here, "hook-notify.mjs");
@@ -23,7 +23,7 @@ const manager = new SessionManager({
     sessionId,
     // ユーザー自身の設定は残したまま、状態通知用の hook だけを追加で読ませる。
     "--settings",
-    writeHookSettings(sessionId, notifyScriptPath),
+    writeHookSettings(notifyScriptPath),
   ],
   port,
   summarizer,
@@ -40,11 +40,12 @@ const shells = new SessionManager({
   tmuxPrefix: SHELL_TMUX_PREFIX,
 });
 
+/** ペイン種別ごとの管理者。WebSocket はクエリの kind でこの表を引く。 */
+const managers: Record<PaneKind, SessionManager> = { agent: manager, shell: shells };
+
 // エージェントが終わったら、その脇で開いていたシェルも畳む。
-manager.onChange(() => {
-  for (const shell of shells.list()) {
-    if (!manager.get(shell.id)) shells.kill(shell.id);
-  }
+manager.onChange((removedId) => {
+  if (removedId !== undefined) shells.kill(removedId);
 });
 
 const app = createApp(manager, shells, join(here, "..", "dist"));
@@ -59,7 +60,8 @@ server.on("upgrade", (req, socket, head) => {
   }
   const sessionId = url.searchParams.get("session");
   // スプリットで開いたシェルは同じ id を別の管理者が持つので、kind で振り分ける。
-  const target = url.searchParams.get("kind") === "shell" ? shells : manager;
+  const kind = url.searchParams.get(PANE_KIND_PARAM);
+  const target = managers[isPaneKind(kind) ? kind : "agent"];
   if (!sessionId || !target.get(sessionId)) {
     socket.destroy();
     return;
@@ -120,11 +122,14 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 // 前回のサーバが残した tmux セッションを拾い直してから待ち受ける。
-const recovered = manager.recover();
+// エージェントとシェルは同じソケットを名前の前置きで分けているだけなので、
+// list-sessions は 1 回だけ引いて両方へ配る。
+const tmuxSessions = manager.tmuxEnabled ? readTmuxSessionList(DEFAULT_TMUX_SOCKET) : "";
+const recovered = manager.recover(tmuxSessions);
 if (recovered > 0) console.log(`tmux から ${recovered} 件のセッションを復元しました`);
 
 // 脇に開いていたシェルも同じく拾い直す。id が親と同じなので対応づけはそれだけで済む。
-const recoveredShells = shells.recover();
+const recoveredShells = shells.recover(tmuxSessions);
 if (recoveredShells > 0) console.log(`tmux から ${recoveredShells} 件のシェルを復元しました`);
 
 server.listen(port, () => {
