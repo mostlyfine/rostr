@@ -37,9 +37,14 @@ let observer: ResizeObserver | null = null;
 let screen: HTMLElement | null = null;
 /** 1 セルの大きさ。ホイールのたびに測るとレイアウトを叩くので、fit のときだけ測り直す。 */
 let cell: { width: number; height: number } | null = null;
+/** 最後にサーバへ伝えた大きさ。同じ値を送り直すと tmux が無駄に全画面を描き直す。 */
+let sent: { cols: number; rows: number } | null = null;
 
-const send = (message: ClientMessage) => {
-  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+/** 送れたかを返す。接続前に捨てた分は、送れたことにして覚えてしまわないよう呼び手で見る。 */
+const send = (message: ClientMessage): boolean => {
+  if (socket?.readyState !== WebSocket.OPEN) return false;
+  socket.send(JSON.stringify(message));
+  return true;
 };
 
 /** 表示中のときだけ寸法が測れるので、可視化直後とリサイズ時に呼ぶ。 */
@@ -51,13 +56,32 @@ const fit = () => {
     // 非表示のまま呼ばれた場合は寸法が取れないので何もしない。
     return;
   }
-  send({ type: "resize", cols: term.cols, rows: term.rows });
+  // 倍率を変えるとサイドバーの幅も変わるので、ResizeObserver と倍率の watch が同じフレームで
+  // ここへ来る。大きさが変わったときだけ送れば、tmux の再描画は一度で済む。
+  const size = { cols: term.cols, rows: term.rows };
+  const changed = sent?.cols !== size.cols || sent.rows !== size.rows;
+  if (changed && send({ type: "resize", ...size })) sent = size;
   // xterm はセル寸法を公開していないので、描かれている領域の実寸を列数・行数で割って求める。
   const rect = screen?.getBoundingClientRect();
   cell =
     rect && rect.width > 0 && rect.height > 0
       ? { width: rect.width / term.cols, height: rect.height / term.rows }
       : null;
+};
+
+/** 予約済みの再計測。倍率を変えると ResizeObserver と倍率の watch が同じフレームで来る。 */
+let pendingFit = 0;
+
+/**
+ * 再計測を1フレームに1回へ畳む。fit() は寸法を読んでレイアウトを強制するので、
+ * 同じフレームで二度呼ぶ意味がない。非表示なら測れないので予約もしない。
+ */
+const scheduleFit = () => {
+  if (pendingFit || !props.visible) return;
+  pendingFit = requestAnimationFrame(() => {
+    pendingFit = 0;
+    fit();
+  });
 };
 
 onMounted(() => {
@@ -117,7 +141,7 @@ onMounted(() => {
   socket.onmessage = (event) => void replayGate.write(event.data as string);
   socket.onopen = () => fit();
 
-  observer = new ResizeObserver(() => fit());
+  observer = new ResizeObserver(scheduleFit);
   observer.observe(host.value!);
 
   if (props.visible) fit();
@@ -151,15 +175,18 @@ watch(currentTheme, (theme) => {
 watch(fontScale, (scale) => {
   if (!term) return;
   term.options.fontSize = terminalFontSize(scale);
-  requestAnimationFrame(() => fit());
+  scheduleFit();
 });
 
 defineExpose({ focus, hasFocus });
 
 onBeforeUnmount(() => {
   observer?.disconnect();
+  // 予約が残っていると、破棄した端末に対して測り直しが走る。
+  if (pendingFit) cancelAnimationFrame(pendingFit);
   socket?.close();
   term?.dispose();
+  term = null;
 });
 </script>
 
