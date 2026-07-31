@@ -20,20 +20,20 @@ const { label: soundLabel, toggle: toggleSound } = useSoundSettings();
       <h1>rostr</h1>
       <div class="actions">
         <button
-          class="theme"
-          data-test="theme-toggle"
-          :title="themeLabel.title"
-          @click="toggleTheme()"
-        >
-          {{ themeLabel.icon }}
-        </button>
-        <button
           class="sound"
           data-test="sound-toggle"
           :title="soundLabel.title"
           @click="toggleSound()"
         >
           {{ soundLabel.icon }}
+        </button>
+        <button
+          class="theme"
+          data-test="theme-toggle"
+          :title="themeLabel.title"
+          @click="toggleTheme()"
+        >
+          {{ themeLabel.icon }}
         </button>
         <button class="new" data-test="new-session" @click="emit('create')">+ New</button>
       </div>
