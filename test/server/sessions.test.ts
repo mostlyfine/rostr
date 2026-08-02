@@ -14,11 +14,12 @@ const newManager = (
     launch?: (kind: AgentKind, id: string) => AgentLaunch;
     scrollbackChars?: number;
     summarizer?: Summarizer;
+    supportsHooks?: (kind: AgentKind) => boolean;
   } = {},
 ) => {
   const manager = new SessionManager({
     launch: opts.launch ?? ((kind, id) => ({ kind, bin: "/bin/sh", args: [] })),
-    supportsHooks: () => false,
+    supportsHooks: opts.supportsHooks ?? ((kind) => kind === "claude"),
     port: 0,
     scrollbackChars: opts.scrollbackChars ?? 64,
     summarizer: opts.summarizer,
@@ -493,6 +494,22 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
 });
 
 describe("SessionManager の要約", () => {
+  it("Codex の Stop hook は状態を変えず要約を依頼しない", () => {
+    const fake = fakeSummarizer();
+    const manager = newManager({ summarizer: fake.summarizer });
+    const session = manager.create("/tmp", "codex-id", "codex");
+    const before = manager.get(session.id);
+
+    expect(
+      manager.applyHook(session.id, {
+        hook_event_name: "Stop",
+        transcript_path: "/tmp/conv.jsonl",
+      }),
+    ).toBe(false);
+    expect(manager.get(session.id)).toEqual(before);
+    expect(fake.requests).toEqual([]);
+  });
+
   it("Stop で、覚えておいた transcript_path を使って要約を依頼する", () => {
     const fake = fakeSummarizer();
     const manager = newManager({ summarizer: fake.summarizer });

@@ -248,6 +248,7 @@ export class SessionManager {
   applyHook(id: string, event: HookEvent): boolean {
     const entry = this.entries.get(id);
     if (!entry) return false;
+    if (!this.options.supportsHooks(entry.session.agent)) return false;
 
     // 会話ファイルの場所は毎回同じとは限らない（worktree 移動などで変わる）ので都度上書きする。
     if (typeof event.transcript_path === "string" && event.transcript_path !== "") {
