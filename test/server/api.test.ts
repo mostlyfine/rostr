@@ -9,7 +9,7 @@ const managers: SessionManager[] = [];
 
 const newManager = () => {
   const manager = new SessionManager({
-    launch: (kind) => ({ kind, bin: "/bin/sh", args: [] }),
+    launch: (kind, _sessionId) => ({ kind, bin: "/bin/sh", args: [] }),
     supportsHooks: () => false,
     port: 0,
     scrollbackChars: 4096,
@@ -77,6 +77,21 @@ describe("POST /api/sessions", () => {
     expect(res.body.cwd).toBe("/tmp");
     expect(res.body.state).toBe("idle");
     expect(manager.list()).toHaveLength(1);
+  });
+
+  it("Codex を指定すると Codex セッションを作って返す", async () => {
+    const { app } = setup();
+    const res = await request(app).post("/api/sessions").send({ cwd: "/tmp", agent: "codex" });
+    expect(res.status).toBe(201);
+    expect(res.body.agent).toBe("codex");
+  });
+
+  it("未知の agent なら 400 でセッションを作らない", async () => {
+    const { app, manager } = setup();
+    const res = await request(app).post("/api/sessions").send({ cwd: "/tmp", agent: "unknown" });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "agent が不正です" });
+    expect(manager.list()).toEqual([]);
   });
 
   it("cwd が無ければ 400", async () => {

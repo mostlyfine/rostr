@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import express from "express";
 import type { Express, Request, Response } from "express";
+import { isAgentKind } from "../common/agents";
 import type { HookEvent, SessionView } from "../common/types";
 import type { SessionManager } from "./sessions";
 
@@ -31,8 +32,14 @@ export const createApp = (
       res.status(400).json({ error: "cwd を指定してください" });
       return;
     }
+    const suppliedAgent = req.body?.agent;
+    const agent = suppliedAgent === undefined ? "claude" : suppliedAgent;
+    if (!isAgentKind(agent)) {
+      res.status(400).json({ error: "agent が不正です" });
+      return;
+    }
     try {
-      res.status(201).json(manager.create(cwd.trim()));
+      res.status(201).json(manager.create(cwd.trim(), undefined, agent));
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
     }
