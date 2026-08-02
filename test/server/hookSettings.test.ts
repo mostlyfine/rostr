@@ -1,5 +1,6 @@
-import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { execPath } from "node:process";
+import { readFileSync, rmSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { HOOKED_EVENTS } from "../../common/types";
 import {
@@ -61,15 +62,23 @@ describe("Copilot hook settings", () => {
     "sessionEnd",
   ] as const;
 
-  it("正規化に必要な camelCase イベントを notifier に渡す", () => {
-    const settings = buildCopilotHookSettings("/abs/hook-notify.mjs");
+  it("bash 用の notifier コマンドを各 camelCase イベントに設定する", () => {
+    const settings = buildCopilotHookSettings("/a b/hook-notify.mjs");
     expect(Object.keys(settings.hooks).sort()).toEqual([...events].sort());
 
     for (const event of events) {
       const hook = settings.hooks[event][0];
       expect(hook.type).toBe("command");
-      expect(hook.command).toContain('"/abs/hook-notify.mjs" copilot');
-      expect(hook.command).toContain(event);
+      expect(hook.bash).toBe(`"${execPath}" "/a b/hook-notify.mjs" copilot ${event}`);
+    }
+  });
+
+  it("PowerShell 用の notifier コマンドは quoted Node execPath を call 演算子で実行する", () => {
+    const settings = buildCopilotHookSettings("/a b/hook-notify.mjs");
+
+    for (const event of events) {
+      const hook = settings.hooks[event][0];
+      expect(hook.powershell).toBe(`& "${execPath}" "/a b/hook-notify.mjs" copilot ${event}`);
     }
   });
 

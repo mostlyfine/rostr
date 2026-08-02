@@ -52,7 +52,8 @@ type CopilotHookEvent = (typeof COPILOT_HOOK_EVENTS)[number];
 
 interface CopilotHookCommand {
   type: "command";
-  command: string;
+  bash: string;
+  powershell: string;
 }
 
 export interface CopilotHookSettings {
@@ -66,7 +67,8 @@ export const buildCopilotHookSettings = (notifyScriptPath: string): CopilotHookS
   for (const event of COPILOT_HOOK_EVENTS) {
     hooks[event] = [{
       type: "command",
-      command: `"${execPath}" "${notifyScriptPath}" copilot ${event}`,
+      bash: `"${execPath}" "${notifyScriptPath}" copilot ${event}`,
+      powershell: `& "${execPath}" "${notifyScriptPath}" copilot ${event}`,
     }];
   }
   return { version: 1, hooks };

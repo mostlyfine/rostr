@@ -27,10 +27,15 @@ const runNotifier = (args: string[], input = "", env: NodeJS.ProcessEnv = {}) =>
 
 const collectOneHook = async () => {
   let body = "";
+  let received!: () => void;
+  const requestReceived = new Promise<void>((resolve) => { received = resolve; });
   const server = createServer((req, res) => {
     req.setEncoding("utf8");
     req.on("data", (chunk) => { body += chunk; });
-    req.on("end", () => res.end());
+    req.on("end", () => {
+      received();
+      res.end();
+    });
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -38,6 +43,7 @@ const collectOneHook = async () => {
   return {
     env: { ROSTR_SESSION_ID: "session-1", ROSTR_PORT: String(port) },
     body: () => body,
+    requestReceived,
     close: () => new Promise<void>((resolveClose) => server.close(() => resolveClose())),
   };
 };
@@ -52,6 +58,7 @@ describe("hook-notify", () => {
         hook.env,
       );
       expect(result.code).toBe(0);
+      await hook.requestReceived;
       expect(JSON.parse(hook.body())).toEqual({
         hook_event_name: "PreToolUse",
         tool_name: "Bash",
@@ -67,6 +74,7 @@ describe("hook-notify", () => {
     try {
       const result = await runNotifier(["codex", JSON.stringify({ type: "agent-turn-complete" })], "", hook.env);
       expect(result.code).toBe(0);
+      await hook.requestReceived;
       expect(JSON.parse(hook.body())).toEqual({ hook_event_name: "Stop" });
     } finally {
       await hook.close();
@@ -77,8 +85,13 @@ describe("hook-notify", () => {
     await expect(runNotifier(["copilot", "sessionStart"], "not-json")).resolves.toMatchObject({ code: 0 });
   });
 
-  it("localhost が応答しなくても一秒で打ち切り exit 0 にする", async () => {
-    const server = createServer(() => {});
+  it("localhost の応答を待たずに dispatch して exit 0 にする", async () => {
+    let dispatched!: () => void;
+    const dispatchedRequest = new Promise<void>((resolve) => { dispatched = resolve; });
+    const server = createServer((req) => {
+      req.resume();
+      req.on("end", dispatched);
+    });
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
     const port = (server.address() as AddressInfo).port;
@@ -89,7 +102,8 @@ describe("hook-notify", () => {
         { ROSTR_SESSION_ID: "session-1", ROSTR_PORT: String(port) },
       );
       expect(result.code).toBe(0);
-      expect(result.elapsed).toBeLessThan(1_500);
+      expect(result.elapsed).toBeLessThan(500);
+      await dispatchedRequest;
     } finally {
       await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
     }
