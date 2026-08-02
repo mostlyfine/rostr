@@ -10,7 +10,7 @@ const managers: SessionManager[] = [];
 const newManager = () => {
   const manager = new SessionManager({
     launch: (kind, _sessionId) => ({ kind, bin: "/bin/sh", args: [] }),
-    supportsHooks: () => false,
+    supportsHooks: (kind) => kind === "claude",
     port: 0,
     scrollbackChars: 4096,
     // API の形だけを見るテストなので、本番の tmux サーバへセッションを残さない。
