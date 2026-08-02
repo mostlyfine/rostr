@@ -60,7 +60,7 @@ export interface NewSessionOptions {
   command: string[];
 }
 
-export type AgentCommandOptions = Pick<AgentLaunch, "bin" | "args"> & {
+export type AgentCommandOptions = Pick<AgentLaunch, "bin" | "args" | "env"> & {
   sessionId: string;
   port: number;
   /** 親から継承した印。子には渡さない。 */
@@ -108,6 +108,7 @@ export const buildAgentCommand = (options: AgentCommandOptions): string[] => [
   ...options.unsetKeys.flatMap((key) => ["-u", key]),
   `ROSTR_SESSION_ID=${options.sessionId}`,
   `ROSTR_PORT=${options.port}`,
+  ...Object.entries(options.env ?? {}).flatMap(([key, value]) => value === undefined ? [] : [`${key}=${value}`]),
   options.bin,
   ...options.args,
 ];

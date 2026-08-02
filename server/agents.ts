@@ -1,9 +1,12 @@
 import type { AgentKind } from "../common/agents";
-import { writeHookSettings } from "./hookSettings";
+import type { HookEvent } from "../common/types";
+import { execPath } from "node:process";
+import { writeCopilotHookSettings, writeHookSettings } from "./hookSettings";
 
 export interface AgentLaunch {
   bin: string;
   args: string[];
+  env?: NodeJS.ProcessEnv;
 }
 
 interface AgentEnvironment {
@@ -17,6 +20,7 @@ export interface AgentRegistry {
   launch(kind: AgentKind, sessionId: string): AgentLaunch;
   supportsSummary(kind: AgentKind): boolean;
   supportsHooks(kind: AgentKind): boolean;
+  supportsHookEvent(kind: AgentKind, event: HookEvent["hook_event_name"]): boolean;
 }
 
 export const createAgentRegistry = (
@@ -43,9 +47,20 @@ export const createAgentRegistry = (
           args: ["--session-id", sessionId, "--settings", writeHookSettings(sessionId, notifyScriptPath)],
         };
       }
-      return { bin: bin(kind), args: [] };
+      if (kind === "copilot") {
+        return {
+          bin: bin(kind),
+          args: [],
+          env: { COPILOT_HOME: writeCopilotHookSettings(sessionId, notifyScriptPath) },
+        };
+      }
+      return {
+        bin: bin(kind),
+        args: ["-c", `notify = ${JSON.stringify([execPath, notifyScriptPath, "codex"])}`],
+      };
     },
     supportsSummary: (kind) => kind === "claude",
-    supportsHooks: (kind) => kind === "claude",
+    supportsHooks: () => true,
+    supportsHookEvent: (kind, event) => kind !== "codex" || event === "Stop",
   };
 };

@@ -20,6 +20,8 @@ const { summarizer, model: summaryModel } = createSummarizerFromEnv(agentBin);
 const manager = new SessionManager({
   launch: agents.launch,
   supportsHooks: agents.supportsHooks,
+  supportsHookEvent: agents.supportsHookEvent,
+  supportsSummary: agents.supportsSummary,
   port,
   summarizer,
 });
@@ -34,6 +36,7 @@ const shells = new SessionManager({
     args: [],
   }),
   supportsHooks: () => false,
+  supportsSummary: () => false,
   port,
   tmuxPrefix: SHELL_TMUX_PREFIX,
 });

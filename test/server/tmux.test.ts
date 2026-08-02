@@ -131,6 +131,19 @@ describe("buildAgentCommand", () => {
   it("エージェントと引数が末尾に並ぶ", () => {
     expect(command.slice(-3)).toEqual(["claude", "--session-id", "abc"]);
   });
+
+  it("provider ごとの起動環境を渡す", () => {
+    const withCopilotHome = buildAgentCommand({
+      bin: "copilot",
+      args: [],
+      env: { COPILOT_HOME: "/ephemeral/copilot-home" },
+      sessionId: "abc",
+      port: 8787,
+      unsetKeys: [],
+    });
+
+    expect(withCopilotHome).toContain("COPILOT_HOME=/ephemeral/copilot-home");
+  });
 });
 
 describe("buildNewSessionArgs", () => {

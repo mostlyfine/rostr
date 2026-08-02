@@ -28,6 +28,10 @@ export interface SessionManagerOptions {
   launch: (kind: AgentKind, sessionId: string) => AgentLaunch;
   /** エージェントが hook を通知できるか。 */
   supportsHooks: (kind: AgentKind) => boolean;
+  /** provider が状態反映に使える hook イベントか。 */
+  supportsHookEvent?: (kind: AgentKind, event: HookEvent["hook_event_name"]) => boolean;
+  /** エージェントが会話要約を生成できるか。 */
+  supportsSummary?: (kind: AgentKind) => boolean;
   /** hook スクリプトが POST する先のポート番号。子プロセスの env に渡す。 */
   port: number;
   /** 各セッションで保持する出力の文字数上限。 */
@@ -170,6 +174,7 @@ export class SessionManager {
           sessionId: id,
           port: this.options.port,
           unsetKeys: STRIPPED_ENV_KEYS,
+          env: launch.env,
         }),
       });
       this.register(session, this.attach(name), name);
@@ -179,7 +184,7 @@ export class SessionManager {
         cols: DEFAULT_COLS,
         rows: DEFAULT_ROWS,
         cwd: absolute,
-        env: this.buildEnv(id),
+        env: this.buildEnv(id, launch.env),
       });
       this.register(session, proc);
     }
@@ -253,6 +258,8 @@ export class SessionManager {
     const entry = this.entries.get(id);
     if (!entry) return false;
     if (!this.options.supportsHooks(entry.session.agent)) return false;
+    if (!(this.options.supportsHookEvent?.(entry.session.agent, event.hook_event_name) ??
+      (entry.session.agent !== "codex" || event.hook_event_name === "Stop"))) return false;
 
     // 会話ファイルの場所は毎回同じとは限らない（worktree 移動などで変わる）ので都度上書きする。
     if (typeof event.transcript_path === "string" && event.transcript_path !== "") {
@@ -282,6 +289,7 @@ export class SessionManager {
   private updateSummary(id: string, entry: Entry, event: HookEvent, patch: Partial<Session>): void {
     const summarizer = this.options.summarizer;
     if (!summarizer) return;
+    if (!(this.options.supportsSummary?.(entry.session.agent) ?? entry.session.agent === "claude")) return;
 
     if (patch.summary === "") {
       summarizer.reset(id);
@@ -400,13 +408,17 @@ export class SessionManager {
    * sessionId を渡した直接起動のときだけ hook 用の変数を足す。
    * tmux 経由の場合はここではなく env(1) 側で渡す（tmux の子は tmux サーバの環境を継ぐため）。
    */
-  private buildEnv(sessionId?: string): Record<string, string> {
+  private buildEnv(sessionId?: string, launchEnv?: NodeJS.ProcessEnv): Record<string, string> {
     const env = { ...(process.env as Record<string, string>) };
     for (const key of STRIPPED_ENV_KEYS) delete env[key];
     for (const key of NESTED_TMUX_ENV_KEYS) delete env[key];
     if (sessionId) {
       env.ROSTR_SESSION_ID = sessionId;
       env.ROSTR_PORT = String(this.options.port);
+    }
+    for (const [key, value] of Object.entries(launchEnv ?? {})) {
+      if (value === undefined) delete env[key];
+      else env[key] = value;
     }
     return env;
   }

@@ -1,7 +1,13 @@
 import { readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HOOKED_EVENTS } from "../../common/types";
-import { buildHookSettings, writeHookSettings } from "../../server/hookSettings";
+import {
+  buildCopilotHookSettings,
+  buildHookSettings,
+  writeCopilotHookSettings,
+  writeHookSettings,
+} from "../../server/hookSettings";
 
 describe("buildHookSettings", () => {
   const settings = buildHookSettings("/abs/hook-notify.mjs");
@@ -40,6 +46,40 @@ describe("writeHookSettings", () => {
       expect(parsed.hooks.UserPromptSubmit).toBeDefined();
     } finally {
       rmSync(path, { force: true });
+    }
+  });
+});
+
+describe("Copilot hook settings", () => {
+  const events = [
+    "sessionStart",
+    "userPromptSubmitted",
+    "preToolUse",
+    "postToolUse",
+    "notification",
+    "agentStop",
+    "sessionEnd",
+  ] as const;
+
+  it("正規化に必要な camelCase イベントを notifier に渡す", () => {
+    const settings = buildCopilotHookSettings("/abs/hook-notify.mjs");
+    expect(Object.keys(settings.hooks).sort()).toEqual([...events].sort());
+
+    for (const event of events) {
+      const hook = settings.hooks[event][0];
+      expect(hook.type).toBe("command");
+      expect(hook.command).toContain('"/abs/hook-notify.mjs" copilot');
+      expect(hook.command).toContain(event);
+    }
+  });
+
+  it("COPILOT_HOME 用にセッション単位の一時 hook 設定を作る", () => {
+    const home = writeCopilotHookSettings("copilot-test-session", "/abs/hook-notify.mjs");
+    try {
+      const settings = JSON.parse(readFileSync(join(home, "hooks", "rostr.json"), "utf8"));
+      expect(settings.hooks.agentStop).toBeDefined();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });

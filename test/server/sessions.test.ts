@@ -15,11 +15,15 @@ const newManager = (
     scrollbackChars?: number;
     summarizer?: Summarizer;
     supportsHooks?: (kind: AgentKind) => boolean;
+    supportsHookEvent?: (kind: AgentKind, event: string) => boolean;
+    supportsSummary?: (kind: AgentKind) => boolean;
   } = {},
 ) => {
   const manager = new SessionManager({
     launch: opts.launch ?? ((_kind, _id) => ({ bin: "/bin/sh", args: [] })),
     supportsHooks: opts.supportsHooks ?? ((kind) => kind === "claude"),
+    supportsHookEvent: opts.supportsHookEvent,
+    supportsSummary: opts.supportsSummary,
     port: 0,
     scrollbackChars: opts.scrollbackChars ?? 64,
     summarizer: opts.summarizer,
@@ -228,6 +232,45 @@ describe("SessionManager", () => {
       delete process.env.CLAUDECODE;
       delete process.env.CLAUDE_CODE_SESSION_ID;
     }
+  });
+
+  it("provider launch の環境変数を子プロセスへ渡す", async () => {
+    const manager = newManager({
+      launch: () => ({ bin: "/bin/sh", args: [], env: { COPILOT_HOME: "/isolated/copilot-home" } }),
+      scrollbackChars: 4096,
+    });
+    const session = manager.create("/tmp", "copilot");
+    manager.write(session.id, 'echo "COPILOT_HOME=${COPILOT_HOME}"\n');
+
+    await waitFor(() => manager.scrollback(session.id).includes("COPILOT_HOME=/isolated/copilot-home"));
+    expect(manager.scrollback(session.id)).toContain("COPILOT_HOME=/isolated/copilot-home");
+  });
+
+  it("Codex は Stop 以外を状態や要約に適用しない", () => {
+    const { requests, summarizer } = fakeSummarizer();
+    const manager = newManager({
+      supportsHooks: () => true,
+      supportsHookEvent: (kind, event) => kind !== "codex" || event === "Stop",
+      supportsSummary: (kind) => kind === "claude",
+      summarizer,
+    });
+    const session = manager.create("/tmp", "codex");
+
+    expect(manager.applyHook(session.id, { hook_event_name: "UserPromptSubmit", prompt: "書き換えない" })).toBe(false);
+    expect(manager.get(session.id)).toMatchObject({
+      state: "idle",
+      prompt: "",
+      activity: "",
+      summary: "",
+    });
+    expect(manager.applyHook(session.id, { hook_event_name: "Stop" })).toBe(true);
+    expect(manager.get(session.id)).toMatchObject({
+      state: "done",
+      prompt: "",
+      activity: "",
+      summary: "",
+    });
+    expect(requests).toEqual([]);
   });
 
   // node --watch の子は IPC で依存関係を報告する。エージェント内で走る別の node（vitest の

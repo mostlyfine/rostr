@@ -70,10 +70,10 @@ which picks up changes via Vite's HMR.
 ## How it works
 
 - Select Claude, Copilot, or Codex in the new-session dialog. rostr launches the selected CLI in a raw `node-pty` pseudo terminal and streams its interactive TUI to the browser as-is, so neither the Agent SDK nor headless mode is used.
-- Claude runs as `claude --session-id <uuid> --settings <temp file>`; the temp file contains only state-notification hooks, and your own `~/.claude/settings.json` stays in effect. Copilot and Codex are launched without added hooks.
+- Claude runs as `claude --session-id <uuid> --settings <temp file>`; the temp file contains only state-notification hooks, and your own `~/.claude/settings.json` stays in effect. Copilot receives a session-specific `COPILOT_HOME` containing only its hook file, so it does not change `~/.copilot` or the repository. Codex receives its `notify` hook through its `-c` TOML override.
 - When tmux is available, the pseudo terminal attaches to a tmux session instead (socket `rostr`, session name `rostr-<agent>-<uuid>`). The tmux server owns the selected CLI process, so every selected agent persists across a rostr server restart. Without tmux, or with `ROSTR_TMUX=0`, rostr spawns the raw PTY directly and stopping the server ends every session.
-- Only Claude currently supplies hook-derived lifecycle state, activity, prompt, and sidebar summaries. Copilot and Codex remain Idle while live and disappear when their process exits. rostr does not install hooks for either of them.
-- Each hook runs `server/hook-notify.mjs`, which forwards the JSON on stdin to `POST /api/hook/:id`. The server turns that into a state via the pure functions in `server/state.ts`.
+- Copilot supplies documented lifecycle state, prompt, activity, and input-needed state. Codex supplies only turn completion, so it can move to Done but never changes prompt, activity, or a waiting/working state. Sidebar summaries remain Claude-only.
+- Each hook runs `server/hook-notify.mjs`, which normalizes Claude and Copilot stdin JSON or Codex's `notify` JSON argument before `POST /api/hook/:id`. It always exits 0 and uses a one-second localhost request timeout.
 
 | Hook event | State |
 | --- | --- |
@@ -83,6 +83,14 @@ which picks up changes via Vite's HMR.
 | `Notification` | Blocked (permission prompt or waiting for input) |
 | `Stop` | Done |
 | `SessionEnd` | Ended |
+
+- Provider state coverage:
+
+| Provider | Supported state signals |
+| --- | --- |
+| Claude | All events in the table |
+| Copilot | `sessionStart`, `userPromptSubmitted`, `preToolUse`, `postToolUse`, `notification` for permission or elicitation, `agentStop`, and `sessionEnd` |
+| Codex | `agent-turn-complete` → Done only |
 
 - No state is final; any later event overwrites it. That includes "Ended". Moving to a worktree or running `/clear` ends only the conversation while the agent stays alive, and it fires `SessionEnd` — pinning that state would leave a still-running row frozen forever. When an agent really does exit, the PTY closing removes its row from the list.
 
@@ -134,8 +142,7 @@ With tmux, agents keep running whether you stop the server or it crashes. On the
 - Your personal tmux server and `~/.tmux.conf` are left alone. Only a dedicated socket (`-L rostr`) and a dedicated minimal config file are used. That config disables the prefix, so keys such as `C-b` are not swallowed by tmux and reach Claude's TUI directly. No keyboard key is taken away.
 - Because a tmux server reads its config only at startup, the config is re-read with `source-file` when a session is created and when one is restored. That way a server already holding agents receives the new config without any of them being killed.
 - Only the working directory and creation time can be restored. A restored
-  Claude session starts as "Idle" and catches up on its next hook event;
-  Copilot and Codex stay Idle until they exit.
+  session starts as "Idle" and catches up on its next provider hook event.
 - A session ends only when it is closed with `x` in the list, or when its
   selected CLI exits.
 - Without tmux, or with `ROSTR_TMUX=0`, it falls back to spawning directly. In that case stopping the server ends every session.
