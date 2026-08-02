@@ -1,7 +1,11 @@
-// Claude Code の hook から起動され、stdin に来た JSON をそのまま rostr サーバへ転送する。
-// hook が非ゼロで終了すると Claude 本体の動作を妨げるため、何が起きても exit 0 で終わる。
+import { normalizeProviderEvent } from "./providerEvents.mjs";
+
+// provider hook から起動され、正規化した JSON を rostr サーバへ転送する。
+// hook が非ゼロで終了するとエージェント本体の動作を妨げるため、何が起きても exit 0 で終わる。
 const sessionId = process.env.ROSTR_SESSION_ID;
 const port = process.env.ROSTR_PORT;
+const provider = process.argv[2] ?? "claude";
+const eventName = provider === "copilot" ? process.argv[3] : undefined;
 
 const readStdin = async () => {
   const chunks = [];
@@ -11,11 +15,14 @@ const readStdin = async () => {
 
 try {
   if (sessionId && port) {
-    const body = await readStdin();
+    const input = provider === "codex" ? process.argv[3] ?? "" : await readStdin();
+    const payload = JSON.parse(input || "{}");
+    const event = provider === "claude" ? payload : normalizeProviderEvent(provider, payload, eventName);
+    if (!event) process.exit(0);
     await fetch(`http://127.0.0.1:${port}/api/hook/${sessionId}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: body || "{}",
+      body: JSON.stringify(event),
       signal: AbortSignal.timeout(1000),
     });
   }
