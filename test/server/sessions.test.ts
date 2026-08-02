@@ -192,7 +192,7 @@ describe("SessionManager", () => {
       const manager = newManager({ scrollbackChars: 4096 });
       const session = manager.create("/tmp");
       manager.write(session.id, 'echo "SID=${ROSTR_SESSION_ID} PARENT=[${CLAUDE_CODE_SESSION_ID}] CC=[${CLAUDECODE}]"\n');
-      await waitFor(() => manager.scrollback(session.id).includes("PARENT="));
+      await waitFor(() => manager.scrollback(session.id).includes(`SID=${session.id}`));
       const output = manager.scrollback(session.id);
       expect(output).toContain(`SID=${session.id}`);
       expect(output).toContain("PARENT=[]");

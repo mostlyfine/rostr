@@ -3,8 +3,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { ClientMessage } from "../common/types";
+import { createAgentRegistry } from "./agents";
 import { createApp } from "./app";
-import { writeHookSettings } from "./hookSettings";
 import { SessionManager } from "./sessions";
 import { createSummarizerFromEnv } from "./summary";
 import { SHELL_TMUX_PREFIX } from "./tmux";
@@ -13,18 +13,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const notifyScriptPath = join(here, "hook-notify.mjs");
 
 const port = Number(process.env.PORT ?? 8787);
-const agentBin = process.env.CLAUDE_BIN ?? "claude";
+const agents = createAgentRegistry(process.env, notifyScriptPath);
+const agentBin = agents.bin("claude");
 const { summarizer, model: summaryModel } = createSummarizerFromEnv(agentBin);
 
 const manager = new SessionManager({
   agentBin,
-  buildArgs: (sessionId) => [
-    "--session-id",
-    sessionId,
-    // ユーザー自身の設定は残したまま、状態通知用の hook だけを追加で読ませる。
-    "--settings",
-    writeHookSettings(sessionId, notifyScriptPath),
-  ],
+  buildArgs: (sessionId) => agents.launch("claude", sessionId).args,
   port,
   summarizer,
 });
