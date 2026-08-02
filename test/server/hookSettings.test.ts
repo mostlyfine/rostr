@@ -1,7 +1,14 @@
+import { join } from "node:path";
+import { execPath } from "node:process";
 import { readFileSync, rmSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { HOOKED_EVENTS } from "../../common/types";
-import { buildHookSettings, writeHookSettings } from "../../server/hookSettings";
+import {
+  buildCopilotHookSettings,
+  buildHookSettings,
+  writeCopilotHookSettings,
+  writeHookSettings,
+} from "../../server/hookSettings";
 
 describe("buildHookSettings", () => {
   const settings = buildHookSettings("/abs/hook-notify.mjs");
@@ -40,6 +47,48 @@ describe("writeHookSettings", () => {
       expect(parsed.hooks.UserPromptSubmit).toBeDefined();
     } finally {
       rmSync(path, { force: true });
+    }
+  });
+});
+
+describe("Copilot hook settings", () => {
+  const events = [
+    "sessionStart",
+    "userPromptSubmitted",
+    "preToolUse",
+    "postToolUse",
+    "notification",
+    "agentStop",
+    "sessionEnd",
+  ] as const;
+
+  it("bash 用の notifier コマンドを各 camelCase イベントに設定する", () => {
+    const settings = buildCopilotHookSettings("/a b/hook-notify.mjs");
+    expect(Object.keys(settings.hooks).sort()).toEqual([...events].sort());
+
+    for (const event of events) {
+      const hook = settings.hooks[event][0];
+      expect(hook.type).toBe("command");
+      expect(hook.bash).toBe(`"${execPath}" "/a b/hook-notify.mjs" copilot ${event}`);
+    }
+  });
+
+  it("PowerShell 用の notifier コマンドは quoted Node execPath を call 演算子で実行する", () => {
+    const settings = buildCopilotHookSettings("/a b/hook-notify.mjs");
+
+    for (const event of events) {
+      const hook = settings.hooks[event][0];
+      expect(hook.powershell).toBe(`& "${execPath}" "/a b/hook-notify.mjs" copilot ${event}`);
+    }
+  });
+
+  it("COPILOT_HOME 用にセッション単位の一時 hook 設定を作る", () => {
+    const home = writeCopilotHookSettings("copilot-test-session", "/abs/hook-notify.mjs");
+    try {
+      const settings = JSON.parse(readFileSync(join(home, "hooks", "rostr.json"), "utf8"));
+      expect(settings.hooks.agentStop).toBeDefined();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });

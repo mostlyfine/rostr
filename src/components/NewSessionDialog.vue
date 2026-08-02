@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { AGENTS, AGENT_KINDS, type AgentKind } from "../../common/agents";
 import { loadRecentDirs } from "../recentDirs";
 
 const props = defineProps<{ error: string | null; busy: boolean }>();
-const emit = defineEmits<{ submit: [cwd: string]; cancel: [] }>();
+const emit = defineEmits<{ submit: [cwd: string, agent: AgentKind]; cancel: [] }>();
 
 const cwd = ref("");
+const agent = ref<AgentKind>("claude");
 const recentDirs = ref<string[]>(loadRecentDirs());
 const input = ref<HTMLInputElement | null>(null);
 
@@ -14,7 +16,7 @@ onMounted(() => input.value?.focus());
 const onSubmit = () => {
   const value = cwd.value.trim();
   if (value === "") return;
-  emit("submit", value);
+  emit("submit", value, agent.value);
 };
 </script>
 
@@ -22,6 +24,15 @@ const onSubmit = () => {
   <div class="backdrop" @click.self="emit('cancel')">
     <form class="dialog" @submit.prevent="onSubmit">
       <h2>Launch New Agent</h2>
+
+      <label>
+        Agent
+        <select v-model="agent" data-test="agent">
+          <option v-for="kind in AGENT_KINDS" :key="kind" :value="kind">
+            {{ AGENTS[kind].label }}
+          </option>
+        </select>
+      </label>
 
       <label>
         Working Directory (absolute path)
@@ -87,7 +98,8 @@ label {
   font-size: var(--fs-xs);
   color: var(--text-secondary);
 }
-input {
+input,
+select {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -96,7 +108,8 @@ input {
   font-size: var(--fs-sm);
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
-input:focus {
+input:focus,
+select:focus {
   outline: none;
   border-color: var(--focus-ring);
 }

@@ -4,6 +4,7 @@ import type { Session } from "../../common/types";
 
 const base: Session = {
   id: "s1",
+  agent: "claude",
   cwd: "/tmp/proj",
   title: "proj",
   state: "idle",

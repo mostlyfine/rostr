@@ -7,6 +7,7 @@ import type { Session } from "../../common/types";
 
 const session = (over: Partial<Session>): Session => ({
   id: "id",
+  agent: "claude",
   cwd: "/tmp/proj",
   title: "proj",
   state: "idle",
@@ -153,6 +154,13 @@ describe("Sidebar", () => {
 });
 
 describe("SessionItem", () => {
+  it("タイトルの横にエージェント名を表示する", () => {
+    const wrapper = mount(SessionItem, {
+      props: { session: session({ agent: "copilot" }), selected: false },
+    });
+    expect(wrapper.text()).toContain("GitHub Copilot CLI");
+  });
+
   it("タイトル・プロンプト・activity を表示する", () => {
     const wrapper = mount(SessionItem, {
       props: {

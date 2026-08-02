@@ -1,9 +1,12 @@
+import type { AgentKind } from "./agents";
+
 /** エージェントの状態。サイドバーのグループ分けに使う。 */
 export type AgentState = "idle" | "working" | "waiting" | "done" | "exited";
 
 export interface Session {
   /** UUID。claude --session-id にもそのまま渡す。 */
   id: string;
+  agent: AgentKind;
   cwd: string;
   /** cwd の basename。 */
   title: string;

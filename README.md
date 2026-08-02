@@ -5,7 +5,8 @@ A tool for launching, monitoring, and ending multiple Claude Code sessions from 
 ## Requirements
 
 - Node.js 22 or later
-- The `claude` CLI (must be on `PATH`; override it with `CLAUDE_BIN`)
+- The `claude`, `copilot`, and `codex` CLIs are each optional. The binary
+  selected when launching a session must be on `PATH` (or overridden below).
 - `tmux` (optional. With it, agents survive a server restart. Without it, agents are spawned directly as before.)
 
 ## Quick start (no clone)
@@ -29,9 +30,9 @@ npx github:mostlyfine/rostr#v0.2.0
 ```
 
 The requirements above still apply, and the environment variables below
-(`PORT`, `CLAUDE_BIN`, `ROSTR_TMUX`) work the same way. This project is not
-published to the npm registry on purpose; the GitHub reference above is the
-only supported install method.
+(`PORT`, `CLAUDE_BIN`, `COPILOT_BIN`, `CODEX_BIN`, `ROSTR_TMUX`) work the
+same way. This project is not published to the npm registry on purpose; the
+GitHub reference above is the only supported install method.
 
 ## Getting started
 
@@ -59,17 +60,20 @@ which picks up changes via Vite's HMR.
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `8787` | Server port |
-| `CLAUDE_BIN` | `claude` | Binary launched for each agent |
+| `CLAUDE_BIN` | `claude` | Binary launched for Claude sessions and Claude sidebar summaries |
+| `COPILOT_BIN` | `copilot` | Binary launched for Copilot sessions |
+| `CODEX_BIN` | `codex` | Binary launched for Codex sessions |
 | `ROSTR_TMUX` | (auto-detected) | Set to `0` to skip tmux and spawn directly |
 | `ROSTR_SUMMARY` | `1` | Set to `0` to stop generating sidebar summaries |
 | `ROSTR_SUMMARY_MODEL` | `haiku` | Model used for the sidebar summary |
 
 ## How it works
 
-- Each agent runs in a `node-pty` pseudo terminal as `claude --session-id <uuid> --settings <temp file>`. The interactive TUI is streamed to the browser as-is, so neither the Agent SDK nor headless mode is used.
-- When tmux is available, that pseudo terminal attaches to a tmux session instead (socket `rostr`, session name `rostr-<uuid>`). The tmux server owns the agent process, so the Node server is only a client that happens to be attached.
-- The temp file passed to `--settings` contains nothing but the hooks used for state notifications. Your own `~/.claude/settings.json` stays in effect.
-- Each hook runs `server/hook-notify.mjs`, which forwards the JSON on stdin to `POST /api/hook/:id`. The server turns that into a state via the pure functions in `server/state.ts`.
+- Select Claude, Copilot, or Codex in the new-session dialog. rostr launches the selected CLI in a raw `node-pty` pseudo terminal and streams its interactive TUI to the browser as-is, so neither the Agent SDK nor headless mode is used.
+- Claude runs as `claude --session-id <uuid> --settings <temp file>`; the temp file contains only state-notification hooks, and your own `~/.claude/settings.json` stays in effect. Copilot receives a session-specific `COPILOT_HOME` containing only its hook file, so it does not change `~/.copilot` or the repository. Codex receives its `notify` hook through its `-c` TOML override.
+- When tmux is available, the pseudo terminal attaches to a tmux session instead (socket `rostr`, session name `rostr-<agent>-<uuid>`). The tmux server owns the selected CLI process, so every selected agent persists across a rostr server restart. Without tmux, or with `ROSTR_TMUX=0`, rostr spawns the raw PTY directly and stopping the server ends every session.
+- Copilot supplies documented lifecycle state, prompt, activity, and input-needed state. Codex supplies only turn completion, so it can move to Done but never changes prompt, activity, or a waiting/working state. Sidebar summaries remain Claude-only.
+- Each hook runs `server/hook-notify.mjs`, which normalizes Claude and Copilot stdin JSON or Codex's `notify` JSON argument before `POST /api/hook/:id`. It always exits 0 and uses a one-second localhost request timeout.
 
 | Hook event | State |
 | --- | --- |
@@ -80,6 +84,14 @@ which picks up changes via Vite's HMR.
 | `Stop` | Done |
 | `SessionEnd` | Ended |
 
+- Provider state coverage:
+
+| Provider | Supported state signals |
+| --- | --- |
+| Claude | All events in the table |
+| Copilot | `sessionStart`, `userPromptSubmitted`, `preToolUse`, `postToolUse`, `notification` for permission or elicitation, `agentStop`, and `sessionEnd` |
+| Codex | `agent-turn-complete` → Done only |
+
 - No state is final; any later event overwrites it. That includes "Ended". Moving to a worktree or running `/clear` ends only the conversation while the agent stays alive, and it fires `SessionEnd` — pinning that state would leave a still-running row frozen forever. When an agent really does exit, the PTY closing removes its row from the list.
 
 - List changes are streamed over SSE (`GET /api/events`), and terminal I/O over WebSocket (`/ws?session=<id>`).
@@ -87,7 +99,14 @@ which picks up changes via Vite's HMR.
 
 ### Sidebar summaries
 
-Each time an agent finishes a turn (`Stop`) or the user submits a new prompt (`UserPromptSubmit`), the conversation JSONL that Claude Code reports through `transcript_path` is read and the last few turns are piped into `claude -p --model haiku`. The model answers with a short phrase describing what the user is trying to accomplish, and that phrase becomes the summary line in the sidebar. `UserPromptSubmit` events generated by an auto-injected background task notification (`<task-notification>`) don't trigger a regeneration, since they aren't something the user actually typed.
+Each time a Claude session finishes a turn (`Stop`) or the user submits a new
+prompt (`UserPromptSubmit`), the conversation JSONL that Claude Code reports
+through `transcript_path` is read and the last few turns are piped into
+`claude -p --model haiku`. The model answers with a short phrase describing
+what the user is trying to accomplish, and that phrase becomes the summary
+line in the sidebar. `UserPromptSubmit` events generated by an auto-injected
+background task notification (`<task-notification>`) don't trigger a
+regeneration, since they aren't something the user actually typed.
 
 - Only the last 5 user turns (600 chars each) and the most recent assistant turn (160 chars) are sent, so the input stays small no matter how long the conversation grows.
 - One generation runs per agent at a time. A `Stop` or `UserPromptSubmit` that arrives while one is still running is dropped rather than queued, and a generation that takes longer than 30 seconds is killed.
@@ -122,8 +141,10 @@ With tmux, agents keep running whether you stop the server or it crashes. On the
 
 - Your personal tmux server and `~/.tmux.conf` are left alone. Only a dedicated socket (`-L rostr`) and a dedicated minimal config file are used. That config disables the prefix, so keys such as `C-b` are not swallowed by tmux and reach Claude's TUI directly. No keyboard key is taken away.
 - Because a tmux server reads its config only at startup, the config is re-read with `source-file` when a session is created and when one is restored. That way a server already holding agents receives the new config without any of them being killed.
-- Only the working directory and creation time can be restored. State, prompt, and current activity all come from hooks, so a restored agent starts as "Idle" and catches up on the next hook event.
-- A session ends only when it is closed with `x` in the list, or when `claude` itself exits.
+- Only the working directory and creation time can be restored. A restored
+  session starts as "Idle" and catches up on its next provider hook event.
+- A session ends only when it is closed with `x` in the list, or when its
+  selected CLI exits.
 - Without tmux, or with `ROSTR_TMUX=0`, it falls back to spawning directly. In that case stopping the server ends every session.
 
 ```bash

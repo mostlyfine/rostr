@@ -1,11 +1,13 @@
 import { spawnSync } from "node:child_process";
+import { AGENT_KINDS, type AgentKind } from "../common/agents";
+import type { AgentLaunch } from "./agents";
 import { writeSettingsFile } from "./settingsDir";
 
 /** ユーザー個人の tmux サーバと混ざらないよう、専用ソケットで動かす。 */
 export const DEFAULT_TMUX_SOCKET = "rostr";
 
 /**
- * tmux セッション名の前置き。名前の残りがそのままセッション id になる。
+ * tmux セッション名の前置き。エージェントは kind と id、シェルは id を後ろに続ける。
  * シェルは親エージェントと同じ id を使うので、区別できるのは前置きだけ。
  * どちらか一方がもう一方の前置きで始まっていると復元時に取り違えるため、
  * "rostr-" と "rostr_shell-" のように互いに前方一致しない綴りにしてある。
@@ -41,7 +43,9 @@ const TMUX_CONF = [
 const LIST_FORMAT = "#{session_name}\t#{session_path}\t#{session_created}";
 
 export interface TmuxSessionInfo {
+  name: string;
   id: string;
+  agent: AgentKind;
   cwd: string;
   createdAt: number;
 }
@@ -56,26 +60,41 @@ export interface NewSessionOptions {
   command: string[];
 }
 
-export interface AgentCommandOptions {
-  agentBin: string;
-  args: string[];
+export type AgentCommandOptions = Pick<AgentLaunch, "bin" | "args" | "env"> & {
   sessionId: string;
   port: number;
   /** 親から継承した印。子には渡さない。 */
   unsetKeys: readonly string[];
-}
+};
 
-export const tmuxSessionName = (id: string, prefix = AGENT_TMUX_PREFIX): string =>
-  `${prefix}${id}`;
+export const tmuxSessionName = (
+  id: string,
+  agent: AgentKind = "claude",
+  prefix = AGENT_TMUX_PREFIX,
+): string => (prefix === AGENT_TMUX_PREFIX ? `${prefix}${agent}-${id}` : `${prefix}${id}`);
+
+const sessionInfoFromName = (
+  name: string,
+  prefix = AGENT_TMUX_PREFIX,
+): Pick<TmuxSessionInfo, "id" | "agent"> | undefined => {
+  if (!name.startsWith(prefix)) return undefined;
+  const rest = name.slice(prefix.length);
+  if (rest === "") return undefined;
+  if (prefix !== AGENT_TMUX_PREFIX) return { id: rest, agent: "claude" };
+
+  for (const agent of AGENT_KINDS) {
+    const agentPrefix = `${agent}-`;
+    if (rest.startsWith(agentPrefix) && rest.length > agentPrefix.length) {
+      return { id: rest.slice(agentPrefix.length), agent };
+    }
+  }
+  return { id: rest, agent: "claude" };
+};
 
 export const sessionIdFromName = (
   name: string,
   prefix = AGENT_TMUX_PREFIX,
-): string | undefined => {
-  if (!name.startsWith(prefix)) return undefined;
-  const id = name.slice(prefix.length);
-  return id === "" ? undefined : id;
-};
+): string | undefined => sessionInfoFromName(name, prefix)?.id;
 
 /** 設定を一時ファイルへ書き出し、そのパスを返す。 */
 export const writeTmuxConf = (): string => writeSettingsFile("tmux.conf", TMUX_CONF);
@@ -89,7 +108,8 @@ export const buildAgentCommand = (options: AgentCommandOptions): string[] => [
   ...options.unsetKeys.flatMap((key) => ["-u", key]),
   `ROSTR_SESSION_ID=${options.sessionId}`,
   `ROSTR_PORT=${options.port}`,
-  options.agentBin,
+  ...Object.entries(options.env ?? {}).flatMap(([key, value]) => value === undefined ? [] : [`${key}=${value}`]),
+  options.bin,
   ...options.args,
 ];
 
@@ -157,12 +177,12 @@ export const parseListSessions = (
   const sessions: TmuxSessionInfo[] = [];
   for (const line of stdout.split("\n")) {
     const [name, cwd, created] = line.split("\t");
-    const id = name ? sessionIdFromName(name, prefix) : undefined;
-    if (!id || !cwd) continue;
+    const session = name ? sessionInfoFromName(name, prefix) : undefined;
+    if (!session || !cwd) continue;
     const seconds = Number(created);
     // session_created は秒。読めない場合は復元時刻で代用する。
     const createdAt = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : Date.now();
-    sessions.push({ id, cwd, createdAt });
+    sessions.push({ name, ...session, cwd, createdAt });
   }
   return sessions;
 };

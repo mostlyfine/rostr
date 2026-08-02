@@ -3,7 +3,9 @@ import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import pty from "node-pty";
 import type { IPty } from "node-pty";
+import type { AgentKind } from "../common/agents";
 import type { HookEvent, Session } from "../common/types";
+import type { AgentLaunch } from "./agents";
 import { applyHookEvent } from "./state";
 import type { Summarizer } from "./summary";
 import { createModeTracker, type ModeTracker } from "./terminalModes";
@@ -22,10 +24,14 @@ import {
 } from "./tmux";
 
 export interface SessionManagerOptions {
-  /** 起動するバイナリ。既定は claude。テストでは /bin/sh に差し替える。 */
-  agentBin: string;
-  /** セッション id から起動引数を組み立てる。 */
-  buildArgs: (sessionId: string) => string[];
+  /** kind とセッション id に対応した起動コマンドを組み立てる。 */
+  launch: (kind: AgentKind, sessionId: string) => AgentLaunch;
+  /** エージェントが hook を通知できるか。 */
+  supportsHooks: (kind: AgentKind) => boolean;
+  /** provider が状態反映に使える hook イベントか。 */
+  supportsHookEvent?: (kind: AgentKind, event: HookEvent["hook_event_name"]) => boolean;
+  /** エージェントが会話要約を生成できるか。 */
+  supportsSummary?: (kind: AgentKind) => boolean;
   /** hook スクリプトが POST する先のポート番号。子プロセスの env に渡す。 */
   port: number;
   /** 各セッションで保持する出力の文字数上限。 */
@@ -92,8 +98,9 @@ const DEFAULT_ROWS = 30;
 const KILL_GRACE_MS = 3_000;
 
 /** 起動直後・復元直後の Session を組み立てる。状態やプロンプトは hook が来るまで空のまま。 */
-const makeIdleSession = (id: string, cwd: string, createdAt: number): Session => ({
+const makeIdleSession = (id: string, agent: AgentKind, cwd: string, createdAt: number): Session => ({
   id,
+  agent,
   cwd,
   title: basename(cwd) || cwd,
   state: "idle",
@@ -128,9 +135,13 @@ export class SessionManager {
 
   /**
    * 指定ディレクトリでエージェントを起動する。
-   * id を渡すとそれを使う。シェル用のマネージャが親エージェントと同じ id で登録するための口。
    */
-  create(cwd: string, id: string = randomUUID()): Session {
+  create(cwd: string, agent: AgentKind = "claude"): Session {
+    return this.createWithId(cwd, randomUUID(), agent);
+  }
+
+  /** シェルが親エージェントと同じ id を共有して起動するための経路。 */
+  createWithId(cwd: string, id: string, agent: AgentKind = "claude"): Session {
     if (this.entries.has(id)) throw new Error(`セッションは既に存在します: ${id}`);
 
     const absolute = resolve(cwd);
@@ -144,10 +155,11 @@ export class SessionManager {
       throw new Error(`ディレクトリではありません: ${absolute}`);
     }
 
-    const session = makeIdleSession(id, absolute, Date.now());
+    const launch = this.options.launch(agent, id);
+    const session = makeIdleSession(id, agent, absolute, Date.now());
 
     if (this.useTmux) {
-      const name = tmuxSessionName(id, this.tmuxPrefix);
+      const name = tmuxSessionName(id, agent, this.tmuxPrefix);
       this.ensureTmuxConfLoaded();
       startTmuxSession({
         socket: this.tmuxSocket,
@@ -157,21 +169,22 @@ export class SessionManager {
         cols: DEFAULT_COLS,
         rows: DEFAULT_ROWS,
         command: buildAgentCommand({
-          agentBin: this.options.agentBin,
-          args: this.options.buildArgs(id),
+          bin: launch.bin,
+          args: launch.args,
           sessionId: id,
           port: this.options.port,
           unsetKeys: STRIPPED_ENV_KEYS,
+          env: launch.env,
         }),
       });
       this.register(session, this.attach(name), name);
     } else {
-      const proc = pty.spawn(this.options.agentBin, this.options.buildArgs(id), {
+      const proc = pty.spawn(launch.bin, launch.args, {
         name: "xterm-256color",
         cols: DEFAULT_COLS,
         rows: DEFAULT_ROWS,
         cwd: absolute,
-        env: this.buildEnv(id),
+        env: this.buildEnv(id, launch.env),
       });
       this.register(session, proc);
     }
@@ -196,9 +209,8 @@ export class SessionManager {
     let recovered = 0;
     for (const info of infos) {
       if (this.entries.has(info.id)) continue;
-      const name = tmuxSessionName(info.id, this.tmuxPrefix);
-      const session = makeIdleSession(info.id, info.cwd, info.createdAt);
-      this.register(session, this.attach(name), name);
+      const session = makeIdleSession(info.id, info.agent, info.cwd, info.createdAt);
+      this.register(session, this.attach(info.name), info.name);
       recovered += 1;
     }
 
@@ -245,6 +257,9 @@ export class SessionManager {
   applyHook(id: string, event: HookEvent): boolean {
     const entry = this.entries.get(id);
     if (!entry) return false;
+    if (!this.options.supportsHooks(entry.session.agent)) return false;
+    if (!(this.options.supportsHookEvent?.(entry.session.agent, event.hook_event_name) ??
+      (entry.session.agent !== "codex" || event.hook_event_name === "Stop"))) return false;
 
     // 会話ファイルの場所は毎回同じとは限らない（worktree 移動などで変わる）ので都度上書きする。
     if (typeof event.transcript_path === "string" && event.transcript_path !== "") {
@@ -274,6 +289,7 @@ export class SessionManager {
   private updateSummary(id: string, entry: Entry, event: HookEvent, patch: Partial<Session>): void {
     const summarizer = this.options.summarizer;
     if (!summarizer) return;
+    if (!(this.options.supportsSummary?.(entry.session.agent) ?? entry.session.agent === "claude")) return;
 
     if (patch.summary === "") {
       summarizer.reset(id);
@@ -392,13 +408,17 @@ export class SessionManager {
    * sessionId を渡した直接起動のときだけ hook 用の変数を足す。
    * tmux 経由の場合はここではなく env(1) 側で渡す（tmux の子は tmux サーバの環境を継ぐため）。
    */
-  private buildEnv(sessionId?: string): Record<string, string> {
+  private buildEnv(sessionId?: string, launchEnv?: NodeJS.ProcessEnv): Record<string, string> {
     const env = { ...(process.env as Record<string, string>) };
     for (const key of STRIPPED_ENV_KEYS) delete env[key];
     for (const key of NESTED_TMUX_ENV_KEYS) delete env[key];
     if (sessionId) {
       env.ROSTR_SESSION_ID = sessionId;
       env.ROSTR_PORT = String(this.options.port);
+    }
+    for (const [key, value] of Object.entries(launchEnv ?? {})) {
+      if (value === undefined) delete env[key];
+      else env[key] = value;
     }
     return env;
   }

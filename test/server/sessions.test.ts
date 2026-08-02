@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AgentKind } from "../../common/agents";
+import type { AgentLaunch } from "../../server/agents";
 import { SessionManager } from "../../server/sessions";
 import type { Summarizer } from "../../server/summary";
 import { SHELL_TMUX_PREFIX, isTmuxAvailable, tmuxSessionName } from "../../server/tmux";
@@ -9,14 +11,19 @@ const managers: SessionManager[] = [];
 
 const newManager = (
   opts: {
-    buildArgs?: (id: string) => string[];
+    launch?: (kind: AgentKind, id: string) => AgentLaunch;
     scrollbackChars?: number;
     summarizer?: Summarizer;
+    supportsHooks?: (kind: AgentKind) => boolean;
+    supportsHookEvent?: (kind: AgentKind, event: string) => boolean;
+    supportsSummary?: (kind: AgentKind) => boolean;
   } = {},
 ) => {
   const manager = new SessionManager({
-    agentBin: "/bin/sh",
-    buildArgs: opts.buildArgs ?? (() => []),
+    launch: opts.launch ?? ((_kind, _id) => ({ bin: "/bin/sh", args: [] })),
+    supportsHooks: opts.supportsHooks ?? ((kind) => kind === "claude"),
+    supportsHookEvent: opts.supportsHookEvent,
+    supportsSummary: opts.supportsSummary,
     port: 0,
     scrollbackChars: opts.scrollbackChars ?? 64,
     summarizer: opts.summarizer,
@@ -60,23 +67,47 @@ describe("SessionManager", () => {
     expect(manager.list().map((s) => s.id)).toEqual([session.id]);
   });
 
+  it("既定の Claude セッションは kind と id を一度だけ解決する", () => {
+    const launch = vi.fn((_kind: AgentKind, _id: string): AgentLaunch => ({ bin: "/bin/sh", args: [] }));
+    const manager = newManager({ launch });
+    const session = manager.createWithId("/tmp", "claude-id");
+
+    expect(session.agent).toBe("claude");
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(launch).toHaveBeenCalledWith("claude", "claude-id");
+  });
+
+  it("選択した Codex セッションに kind を保存して解決済みコマンドを起動する", async () => {
+    const launch = vi.fn((kind: AgentKind, id: string): AgentLaunch => ({
+      bin: "/bin/sh",
+      args: ["-c", `echo launched-${kind}-${id}; exec /bin/sh`],
+    }));
+    const manager = newManager({ launch });
+    const session = manager.create("/tmp", "codex");
+
+    await waitFor(() => manager.scrollback(session.id).includes(`launched-codex-${session.id}`));
+    expect(session.agent).toBe("codex");
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(launch).toHaveBeenCalledWith("codex", session.id);
+  });
+
   it("存在しないディレクトリは拒否する", () => {
     const manager = newManager();
     expect(() => manager.create("/no/such/dir/at/all")).toThrow(/ディレクトリ/);
   });
 
   // シェル用のマネージャは親エージェントと同じ id で登録し、対応づけを id だけで済ませる。
-  it("id を渡すとその id で登録する", () => {
+  it("createWithId は指定した id で登録する", () => {
     const manager = newManager();
-    const session = manager.create("/tmp", "given-id");
+    const session = manager.createWithId("/tmp", "given-id");
     expect(session.id).toBe("given-id");
     expect(manager.get("given-id")).toBeDefined();
   });
 
   it("同じ id を二度作ろうとしたら拒否する", () => {
     const manager = newManager();
-    manager.create("/tmp", "given-id");
-    expect(() => manager.create("/tmp", "given-id")).toThrow(/既に/);
+    manager.createWithId("/tmp", "given-id");
+    expect(() => manager.createWithId("/tmp", "given-id")).toThrow(/既に/);
   });
 
   it("PTY の出力をスクロールバックに溜める", async () => {
@@ -192,7 +223,7 @@ describe("SessionManager", () => {
       const manager = newManager({ scrollbackChars: 4096 });
       const session = manager.create("/tmp");
       manager.write(session.id, 'echo "SID=${ROSTR_SESSION_ID} PARENT=[${CLAUDE_CODE_SESSION_ID}] CC=[${CLAUDECODE}]"\n');
-      await waitFor(() => manager.scrollback(session.id).includes("PARENT="));
+      await waitFor(() => manager.scrollback(session.id).includes(`SID=${session.id}`));
       const output = manager.scrollback(session.id);
       expect(output).toContain(`SID=${session.id}`);
       expect(output).toContain("PARENT=[]");
@@ -201,6 +232,45 @@ describe("SessionManager", () => {
       delete process.env.CLAUDECODE;
       delete process.env.CLAUDE_CODE_SESSION_ID;
     }
+  });
+
+  it("provider launch の環境変数を子プロセスへ渡す", async () => {
+    const manager = newManager({
+      launch: () => ({ bin: "/bin/sh", args: [], env: { COPILOT_HOME: "/isolated/copilot-home" } }),
+      scrollbackChars: 4096,
+    });
+    const session = manager.create("/tmp", "copilot");
+    manager.write(session.id, 'echo "COPILOT_HOME=${COPILOT_HOME}"\n');
+
+    await waitFor(() => manager.scrollback(session.id).includes("COPILOT_HOME=/isolated/copilot-home"));
+    expect(manager.scrollback(session.id)).toContain("COPILOT_HOME=/isolated/copilot-home");
+  });
+
+  it("Codex は Stop 以外を状態や要約に適用しない", () => {
+    const { requests, summarizer } = fakeSummarizer();
+    const manager = newManager({
+      supportsHooks: () => true,
+      supportsHookEvent: (kind, event) => kind !== "codex" || event === "Stop",
+      supportsSummary: (kind) => kind === "claude",
+      summarizer,
+    });
+    const session = manager.create("/tmp", "codex");
+
+    expect(manager.applyHook(session.id, { hook_event_name: "UserPromptSubmit", prompt: "書き換えない" })).toBe(false);
+    expect(manager.get(session.id)).toMatchObject({
+      state: "idle",
+      prompt: "",
+      activity: "",
+      summary: "",
+    });
+    expect(manager.applyHook(session.id, { hook_event_name: "Stop" })).toBe(true);
+    expect(manager.get(session.id)).toMatchObject({
+      state: "done",
+      prompt: "",
+      activity: "",
+      summary: "",
+    });
+    expect(requests).toEqual([]);
   });
 
   // node --watch の子は IPC で依存関係を報告する。エージェント内で走る別の node（vitest の
@@ -219,16 +289,13 @@ describe("SessionManager", () => {
     }
   });
 
-  it("buildArgs にセッション id が渡る", () => {
-    const seen: string[] = [];
+  it("launch にセッション id が渡る", () => {
+    const launch = vi.fn((_kind: AgentKind, _id: string): AgentLaunch => ({ bin: "/bin/sh", args: [] }));
     const manager = newManager({
-      buildArgs: (id) => {
-        seen.push(id);
-        return [];
-      },
+      launch,
     });
     const session = manager.create("/tmp");
-    expect(seen).toEqual([session.id]);
+    expect(launch).toHaveBeenCalledWith("claude", session.id);
   });
 });
 
@@ -246,8 +313,8 @@ const tmuxSessionNames = (): string[] => {
 describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
   const newTmuxManager = () => {
     const manager = new SessionManager({
-      agentBin: "/bin/sh",
-      buildArgs: () => [],
+      launch: (_kind, _id) => ({ bin: "/bin/sh", args: [] }),
+      supportsHooks: () => false,
       port: 0,
       scrollbackChars: 8192,
       tmux: true,
@@ -316,6 +383,60 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
     expect(recovered?.title).toBe(created.title);
     // 状態は hook 由来なので復元時は idle に戻り、次のイベントで追いつく。
     expect(recovered?.state).toBe("idle");
+    expect(recovered?.agent).toBe("claude");
+  });
+
+  it("Codex の tmux セッションを agent 付きの名前で起動し、復元しても再解決しない", async () => {
+    const firstLaunch = vi.fn((kind: AgentKind, id: string): AgentLaunch => ({
+      bin: "/bin/sh",
+      args: ["-c", `echo launched-${kind}-${id}; exec sh`],
+    }));
+    const first = new SessionManager({
+      launch: firstLaunch,
+      supportsHooks: () => false,
+      port: 0,
+      tmux: true,
+      tmuxSocket: TEST_SOCKET,
+    });
+    managers.push(first);
+    const created = first.createWithId(process.cwd(), "codex-id", "codex");
+    await waitFor(() => tmuxSessionNames().includes(tmuxSessionName(created.id, "codex")));
+    await waitFor(() => first.scrollback(created.id).includes("launched-codex-codex-id"));
+    first.disposeAll();
+
+    const recoveredLaunch = vi.fn((_kind: AgentKind, _id: string): AgentLaunch => ({ bin: "/bin/sh", args: [] }));
+    const second = new SessionManager({
+      launch: recoveredLaunch,
+      supportsHooks: () => false,
+      port: 0,
+      tmux: true,
+      tmuxSocket: TEST_SOCKET,
+    });
+    managers.push(second);
+    second.recover();
+
+    expect(second.get(created.id)?.agent).toBe("codex");
+    expect(recoveredLaunch).not.toHaveBeenCalled();
+  });
+
+  it("旧形式の tmux セッションは Claude として復元する", async () => {
+    const first = newTmuxManager();
+    const created = first.createWithId(process.cwd(), "legacy-id");
+    const legacyName = `rostr-${created.id}`;
+    await waitFor(() => tmuxSessionNames().includes(tmuxSessionName(created.id)));
+    expect(
+      spawnSync(
+        "tmux",
+        ["-L", TEST_SOCKET, "rename-session", "-t", tmuxSessionName(created.id), legacyName],
+        { stdio: "ignore" },
+      ).status,
+    ).toBe(0);
+    first.disposeAll();
+
+    const second = newTmuxManager();
+    second.recover();
+
+    expect(second.get(created.id)?.agent).toBe("claude");
   });
 
   it("復元したセッションにも入力を流せる", async () => {
@@ -357,8 +478,8 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
   describe("tmuxPrefix でシェル用に分ける", () => {
     const newShellManager = () => {
       const manager = new SessionManager({
-        agentBin: "/bin/sh",
-        buildArgs: () => [],
+        launch: (_kind, _id) => ({ bin: "/bin/sh", args: [] }),
+        supportsHooks: () => false,
         port: 0,
         scrollbackChars: 8192,
         tmux: true,
@@ -371,8 +492,8 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
 
     it("シェル用の前置きで tmux セッションが立つ", async () => {
       const shells = newShellManager();
-      const session = shells.create(process.cwd(), "shared-id");
-      const name = tmuxSessionName(session.id, SHELL_TMUX_PREFIX);
+      const session = shells.createWithId(process.cwd(), "shared-id");
+      const name = tmuxSessionName(session.id, "claude", SHELL_TMUX_PREFIX);
       await waitFor(() => tmuxSessionNames().includes(name));
       expect(tmuxSessionNames()).toContain(name);
     });
@@ -381,7 +502,7 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
       const agents = newTmuxManager();
       const shells = newShellManager();
       const agent = agents.create(process.cwd());
-      shells.create(process.cwd(), agent.id);
+      shells.createWithId(process.cwd(), agent.id);
       await waitFor(() => tmuxSessionNames().length === 2);
 
       agents.disposeAll();
@@ -400,13 +521,13 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
       const agents = newTmuxManager();
       const shells = newShellManager();
       const agent = agents.create(process.cwd());
-      shells.create(process.cwd(), agent.id);
+      shells.createWithId(process.cwd(), agent.id);
       await waitFor(() => tmuxSessionNames().length === 2);
 
       shells.kill(agent.id);
 
       await waitFor(
-        () => !tmuxSessionNames().includes(tmuxSessionName(agent.id, SHELL_TMUX_PREFIX)),
+        () => !tmuxSessionNames().includes(tmuxSessionName(agent.id, "claude", SHELL_TMUX_PREFIX)),
       );
       expect(tmuxSessionNames()).toContain(tmuxSessionName(agent.id));
     });
@@ -414,6 +535,22 @@ describe.skipIf(!isTmuxAvailable())("SessionManager (tmux)", () => {
 });
 
 describe("SessionManager の要約", () => {
+  it("Codex の Stop hook は状態を変えず要約を依頼しない", () => {
+    const fake = fakeSummarizer();
+    const manager = newManager({ summarizer: fake.summarizer });
+    const session = manager.createWithId("/tmp", "codex-id", "codex");
+    const before = manager.get(session.id);
+
+    expect(
+      manager.applyHook(session.id, {
+        hook_event_name: "Stop",
+        transcript_path: "/tmp/conv.jsonl",
+      }),
+    ).toBe(false);
+    expect(manager.get(session.id)).toEqual(before);
+    expect(fake.requests).toEqual([]);
+  });
+
   it("Stop で、覚えておいた transcript_path を使って要約を依頼する", () => {
     const fake = fakeSummarizer();
     const manager = newManager({ summarizer: fake.summarizer });

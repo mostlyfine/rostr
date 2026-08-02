@@ -10,6 +10,7 @@ import { rememberRecentDir } from "./recentDirs";
 import { NOTABLE_STATES } from "./sessionGroups";
 import { detectNotableTransitions } from "./notableTransitions";
 import { playNotificationSound } from "./sound";
+import type { AgentKind } from "../common/agents";
 import type { AgentState, Session } from "../common/types";
 
 const { sessions, create, close, openShell, closeShell } = useSessions();
@@ -140,11 +141,11 @@ const openDialog = () => {
   dialogOpen.value = true;
 };
 
-const onSubmit = async (cwd: string) => {
+const onSubmit = async (cwd: string, agent: AgentKind) => {
   busy.value = true;
   dialogError.value = null;
   try {
-    const session = await create(cwd);
+    const session = await create(cwd, agent);
     rememberRecentDir(session.cwd);
     dialogOpen.value = false;
     select(session.id);

@@ -45,6 +45,7 @@ class FakeEventSource {
 
 const session = (over: Partial<Session>): Session => ({
   id: "id",
+  agent: "claude",
   cwd: "/tmp/proj",
   title: "proj",
   state: "idle",
@@ -153,5 +154,21 @@ describe("useSessions のシェル操作", () => {
     await api.closeShell("abc");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/sessions/abc/shell", { method: "DELETE" });
+  });
+});
+
+describe("useSessions の作成", () => {
+  it("選んだ Codex を作成リクエストに含める", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => session({ agent: "codex" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { api } = mountHost();
+
+    await api.create("/tmp/proj", "codex");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cwd: "/tmp/proj", agent: "codex" }),
+    });
   });
 });

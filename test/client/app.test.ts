@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
 import { type VueWrapper, mount } from "@vue/test-utils";
 import type { SessionView } from "../../common/types";
+import NewSessionDialog from "../../src/components/NewSessionDialog.vue";
 import { FONT_SCALE_KEY } from "../../src/fontScale";
 import { SOUND_ENABLED_KEY } from "../../src/soundSettings";
 
@@ -48,6 +49,7 @@ class FakeEventSource {
 
 const session = (over: Partial<SessionView>): SessionView => ({
   id: "id",
+  agent: "claude",
   cwd: "/tmp/proj",
   title: "proj",
   state: "idle",
@@ -87,6 +89,24 @@ describe("App のフォーカス制御", () => {
     await nextTick();
 
     expect(focusSpy).toHaveBeenCalledWith("a");
+  });
+
+  describe("新規セッション作成", () => {
+    it("ダイアログのディレクトリとエージェントを作成リクエストへ渡す", async () => {
+      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => session({ id: "codex", agent: "codex" }) });
+      const wrapper = await mountApp([]);
+      await wrapper.find("[data-test=new-session]").trigger("click");
+
+      wrapper.findComponent(NewSessionDialog).vm.$emit("submit", "/tmp/proj", "codex");
+      await nextTick();
+      await nextTick();
+
+      expect(fetchMock).toHaveBeenCalledWith("/api/sessions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cwd: "/tmp/proj", agent: "codex" }),
+      });
+    });
   });
 
   it("選択中のセッションを再クリックしてもフォーカスが移る", async () => {
