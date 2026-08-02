@@ -1,4 +1,5 @@
 import { onUnmounted, ref } from "vue";
+import type { AgentKind } from "../../common/agents";
 import type { Session, SessionView } from "../../common/types";
 
 /** 張り直すまでの間隔。サーバの再起動が終わる程度には待ち、人が気づく前には戻る長さ。 */
@@ -46,11 +47,11 @@ export const useSessions = () => {
   });
 
   /** 起動に失敗した場合はサーバのエラーメッセージを throw する。 */
-  const create = async (cwd: string): Promise<Session> => {
+  const create = async (cwd: string, agent: AgentKind): Promise<Session> => {
     const res = await fetch("/api/sessions", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ cwd }),
+      body: JSON.stringify({ cwd, agent }),
     });
     const body = await res.json();
     if (!res.ok) throw new Error(body?.error ?? "Failed to launch");

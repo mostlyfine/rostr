@@ -34,11 +34,19 @@ describe("recentDirs", () => {
 });
 
 describe("NewSessionDialog", () => {
-  it("入力したパスで submit を emit する", async () => {
+  it("入力したパスとデフォルトの Claude Code で submit を emit する", async () => {
     const wrapper = mount(NewSessionDialog, { props: { error: null, busy: false } });
     await wrapper.find("input").setValue("  /tmp/proj  ");
     await wrapper.find("form").trigger("submit");
-    expect(wrapper.emitted("submit")?.[0]).toEqual(["/tmp/proj"]);
+    expect(wrapper.emitted("submit")?.[0]).toEqual(["/tmp/proj", "claude"]);
+  });
+
+  it("選んだ GitHub Copilot CLI で submit を emit する", async () => {
+    const wrapper = mount(NewSessionDialog, { props: { error: null, busy: false } });
+    await wrapper.find("input").setValue("/tmp/proj");
+    await wrapper.find("[data-test=agent]").setValue("copilot");
+    await wrapper.find("form").trigger("submit");
+    expect(wrapper.emitted("submit")?.[0]).toEqual(["/tmp/proj", "copilot"]);
   });
 
   it("空欄では submit しない", async () => {

@@ -60,9 +60,9 @@ describe("agent registry", () => {
 describe("agent kinds", () => {
   it("provides labels and rejects unknown kinds", () => {
     expect(AGENTS).toEqual({
-      claude: "Claude Code",
-      copilot: "GitHub Copilot CLI",
-      codex: "OpenAI Codex CLI",
+      claude: { label: "Claude Code" },
+      copilot: { label: "GitHub Copilot CLI" },
+      codex: { label: "OpenAI Codex CLI" },
     });
     expect(AGENT_KINDS.every(isAgentKind)).toBe(true);
     expect(isAgentKind("other")).toBe(false);

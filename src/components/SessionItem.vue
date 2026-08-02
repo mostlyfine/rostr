@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
+import { AGENTS } from "../../common/agents";
 import type { Session } from "../../common/types";
 import { NOTABLE_STATES } from "../sessionGroups";
 
@@ -32,6 +33,7 @@ const select = () => {
       <div class="title-row">
         <span class="dot" :class="props.session.state" />
         <span class="title">{{ props.session.title }}</span>
+        <span class="agent">{{ AGENTS[props.session.agent].label }}</span>
       </div>
       <p
         v-if="props.session.summary"
@@ -92,6 +94,11 @@ const select = () => {
   font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text-strong);
+}
+.agent {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 /* 一覧で最初に目に入ってほしいのはここなので、プロンプトより濃く出す。 */
 .summary {
