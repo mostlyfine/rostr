@@ -30,7 +30,6 @@ const manager = new SessionManager({
  */
 const shells = new SessionManager({
   launch: (kind) => ({
-    kind,
     bin: process.env.ROSTR_SHELL ?? process.env.SHELL ?? "/bin/bash",
     args: [],
   }),

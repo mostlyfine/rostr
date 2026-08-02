@@ -9,7 +9,7 @@ const managers: SessionManager[] = [];
 
 const newManager = () => {
   const manager = new SessionManager({
-    launch: (kind, _sessionId) => ({ kind, bin: "/bin/sh", args: [] }),
+    launch: (_kind, _sessionId) => ({ bin: "/bin/sh", args: [] }),
     supportsHooks: (kind) => kind === "claude",
     port: 0,
     scrollbackChars: 4096,
@@ -278,7 +278,7 @@ describe("GET /api/events", () => {
       const [first] = await readUntilFrames(1);
       expect(first[0].shell).toBe(false);
 
-      shells.create("/tmp", session.id);
+      shells.createWithId("/tmp", session.id);
       const frames = await readUntilFrames(2);
       expect(frames[1][0].shell).toBe(true);
     } finally {

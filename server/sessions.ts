@@ -131,9 +131,13 @@ export class SessionManager {
 
   /**
    * 指定ディレクトリでエージェントを起動する。
-   * id を渡すとそれを使う。シェル用のマネージャが親エージェントと同じ id で登録するための口。
    */
-  create(cwd: string, id: string = randomUUID(), agent: AgentKind = "claude"): Session {
+  create(cwd: string, agent: AgentKind = "claude"): Session {
+    return this.createWithId(cwd, randomUUID(), agent);
+  }
+
+  /** シェルが親エージェントと同じ id を共有して起動するための経路。 */
+  createWithId(cwd: string, id: string, agent: AgentKind = "claude"): Session {
     if (this.entries.has(id)) throw new Error(`セッションは既に存在します: ${id}`);
 
     const absolute = resolve(cwd);

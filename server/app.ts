@@ -39,7 +39,7 @@ export const createApp = (
       return;
     }
     try {
-      res.status(201).json(manager.create(cwd.trim(), undefined, agent));
+      res.status(201).json(manager.create(cwd.trim(), agent));
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
     }
@@ -67,7 +67,7 @@ export const createApp = (
       return;
     }
     try {
-      shells.create(session.cwd, id);
+      shells.createWithId(session.cwd, id);
       res.status(201).end();
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : String(error) });

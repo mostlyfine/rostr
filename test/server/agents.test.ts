@@ -10,12 +10,12 @@ describe("agent registry", () => {
     const registry = createAgentRegistry({}, hookPath);
     const claude = registry.launch("claude", "default-session");
     try {
-      expect(claude).toMatchObject({ kind: "claude", bin: "claude" });
-      expect(registry.launch("copilot", "default-session")).toMatchObject({
-        kind: "copilot",
-        bin: "copilot",
+      expect(claude).toEqual({
+        bin: "claude",
+        args: ["--session-id", "default-session", "--settings", expect.any(String)],
       });
-      expect(registry.launch("codex", "default-session")).toMatchObject({ kind: "codex", bin: "codex" });
+      expect(registry.launch("copilot", "default-session")).toEqual({ bin: "copilot", args: [] });
+      expect(registry.launch("codex", "default-session")).toEqual({ bin: "codex", args: [] });
     } finally {
       rmSync(claude.args[3], { force: true });
     }
