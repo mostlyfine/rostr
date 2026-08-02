@@ -7,6 +7,7 @@ import type { Session } from "../../common/types";
 
 const session = (over: Partial<Session>): Session => ({
   id: "id",
+  agent: "claude",
   cwd: "/tmp/proj",
   title: "proj",
   state: "idle",

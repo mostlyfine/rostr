@@ -3,7 +3,9 @@ import { statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import pty from "node-pty";
 import type { IPty } from "node-pty";
+import type { AgentKind } from "../common/agents";
 import type { HookEvent, Session } from "../common/types";
+import type { AgentLaunch } from "./agents";
 import { applyHookEvent } from "./state";
 import type { Summarizer } from "./summary";
 import { createModeTracker, type ModeTracker } from "./terminalModes";
@@ -22,10 +24,10 @@ import {
 } from "./tmux";
 
 export interface SessionManagerOptions {
-  /** 起動するバイナリ。既定は claude。テストでは /bin/sh に差し替える。 */
-  agentBin: string;
-  /** セッション id から起動引数を組み立てる。 */
-  buildArgs: (sessionId: string) => string[];
+  /** kind とセッション id に対応した起動コマンドを組み立てる。 */
+  launch: (kind: AgentKind, sessionId: string) => AgentLaunch;
+  /** エージェントが hook を通知できるか。 */
+  supportsHooks: (kind: AgentKind) => boolean;
   /** hook スクリプトが POST する先のポート番号。子プロセスの env に渡す。 */
   port: number;
   /** 各セッションで保持する出力の文字数上限。 */
@@ -92,8 +94,9 @@ const DEFAULT_ROWS = 30;
 const KILL_GRACE_MS = 3_000;
 
 /** 起動直後・復元直後の Session を組み立てる。状態やプロンプトは hook が来るまで空のまま。 */
-const makeIdleSession = (id: string, cwd: string, createdAt: number): Session => ({
+const makeIdleSession = (id: string, agent: AgentKind, cwd: string, createdAt: number): Session => ({
   id,
+  agent,
   cwd,
   title: basename(cwd) || cwd,
   state: "idle",
@@ -130,7 +133,7 @@ export class SessionManager {
    * 指定ディレクトリでエージェントを起動する。
    * id を渡すとそれを使う。シェル用のマネージャが親エージェントと同じ id で登録するための口。
    */
-  create(cwd: string, id: string = randomUUID()): Session {
+  create(cwd: string, id: string = randomUUID(), agent: AgentKind = "claude"): Session {
     if (this.entries.has(id)) throw new Error(`セッションは既に存在します: ${id}`);
 
     const absolute = resolve(cwd);
@@ -144,10 +147,11 @@ export class SessionManager {
       throw new Error(`ディレクトリではありません: ${absolute}`);
     }
 
-    const session = makeIdleSession(id, absolute, Date.now());
+    const launch = this.options.launch(agent, id);
+    const session = makeIdleSession(id, agent, absolute, Date.now());
 
     if (this.useTmux) {
-      const name = tmuxSessionName(id, this.tmuxPrefix);
+      const name = tmuxSessionName(id, agent, this.tmuxPrefix);
       this.ensureTmuxConfLoaded();
       startTmuxSession({
         socket: this.tmuxSocket,
@@ -157,8 +161,8 @@ export class SessionManager {
         cols: DEFAULT_COLS,
         rows: DEFAULT_ROWS,
         command: buildAgentCommand({
-          agentBin: this.options.agentBin,
-          args: this.options.buildArgs(id),
+          bin: launch.bin,
+          args: launch.args,
           sessionId: id,
           port: this.options.port,
           unsetKeys: STRIPPED_ENV_KEYS,
@@ -166,7 +170,7 @@ export class SessionManager {
       });
       this.register(session, this.attach(name), name);
     } else {
-      const proc = pty.spawn(this.options.agentBin, this.options.buildArgs(id), {
+      const proc = pty.spawn(launch.bin, launch.args, {
         name: "xterm-256color",
         cols: DEFAULT_COLS,
         rows: DEFAULT_ROWS,
@@ -196,9 +200,8 @@ export class SessionManager {
     let recovered = 0;
     for (const info of infos) {
       if (this.entries.has(info.id)) continue;
-      const name = tmuxSessionName(info.id, this.tmuxPrefix);
-      const session = makeIdleSession(info.id, info.cwd, info.createdAt);
-      this.register(session, this.attach(name), name);
+      const session = makeIdleSession(info.id, info.agent, info.cwd, info.createdAt);
+      this.register(session, this.attach(info.name), info.name);
       recovered += 1;
     }
 

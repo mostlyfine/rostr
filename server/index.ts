@@ -18,8 +18,8 @@ const agentBin = agents.bin("claude");
 const { summarizer, model: summaryModel } = createSummarizerFromEnv(agentBin);
 
 const manager = new SessionManager({
-  agentBin,
-  buildArgs: (sessionId) => agents.launch("claude", sessionId).args,
+  launch: agents.launch,
+  supportsHooks: agents.supportsHooks,
   port,
   summarizer,
 });
@@ -29,8 +29,12 @@ const manager = new SessionManager({
  * tmux セッション名の前置きだけを差し替える。id は親エージェントと共有する。
  */
 const shells = new SessionManager({
-  agentBin: process.env.ROSTR_SHELL ?? process.env.SHELL ?? "/bin/bash",
-  buildArgs: () => [],
+  launch: (kind) => ({
+    kind,
+    bin: process.env.ROSTR_SHELL ?? process.env.SHELL ?? "/bin/bash",
+    args: [],
+  }),
+  supportsHooks: () => false,
   port,
   tmuxPrefix: SHELL_TMUX_PREFIX,
 });

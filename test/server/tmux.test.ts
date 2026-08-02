@@ -21,7 +21,34 @@ import {
 describe("tmuxSessionName / sessionIdFromName", () => {
   it("id を往復できる", () => {
     const id = "0f0b8a3c-1111-2222-3333-444455556666";
-    expect(sessionIdFromName(tmuxSessionName(id))) .toBe(id);
+    expect(tmuxSessionName(id)).toBe(`rostr-claude-${id}`);
+    expect(sessionIdFromName(tmuxSessionName(id))).toBe(id);
+  });
+
+  it("Codex の名前から kind と id を復元できる", () => {
+    const parsed = parseListSessions("rostr-codex-codex-id\t/work\t1700000000\n");
+    expect(parsed).toEqual([
+      {
+        name: "rostr-codex-codex-id",
+        id: "codex-id",
+        agent: "codex",
+        cwd: "/work",
+        createdAt: 1_700_000_000_000,
+      },
+    ]);
+  });
+
+  it("旧形式の名前は Claude として復元できる", () => {
+    const parsed = parseListSessions("rostr-legacy-id\t/work\t1700000000\n");
+    expect(parsed).toEqual([
+      {
+        name: "rostr-legacy-id",
+        id: "legacy-id",
+        agent: "claude",
+        cwd: "/work",
+        createdAt: 1_700_000_000_000,
+      },
+    ]);
   });
 
   it("tmux が嫌う . と : を含まない", () => {
@@ -44,12 +71,12 @@ describe("エージェントとシェルの前置き", () => {
   const id = "0f0b8a3c-1111-2222-3333-444455556666";
 
   it("前置きを指定すると別の名前空間になる", () => {
-    expect(tmuxSessionName(id, SHELL_TMUX_PREFIX)).toBe(`${SHELL_TMUX_PREFIX}${id}`);
-    expect(tmuxSessionName(id, SHELL_TMUX_PREFIX)).not.toBe(tmuxSessionName(id));
+    expect(tmuxSessionName(id, "claude", SHELL_TMUX_PREFIX)).toBe(`${SHELL_TMUX_PREFIX}${id}`);
+    expect(tmuxSessionName(id, "claude", SHELL_TMUX_PREFIX)).not.toBe(tmuxSessionName(id));
   });
 
   it("シェルの名前も tmux が嫌う . と : を含まない", () => {
-    expect(tmuxSessionName(id, SHELL_TMUX_PREFIX)).not.toMatch(/[.:]/);
+    expect(tmuxSessionName(id, "claude", SHELL_TMUX_PREFIX)).not.toMatch(/[.:]/);
   });
 
   it("シェルの名前はエージェントの前置きでは始まらない", () => {
@@ -58,7 +85,7 @@ describe("エージェントとシェルの前置き", () => {
   });
 
   it("互いの名前からは id を取り出さない", () => {
-    const shellName = tmuxSessionName(id, SHELL_TMUX_PREFIX);
+    const shellName = tmuxSessionName(id, "claude", SHELL_TMUX_PREFIX);
     expect(sessionIdFromName(shellName)).toBeUndefined();
     expect(sessionIdFromName(shellName, SHELL_TMUX_PREFIX)).toBe(id);
     expect(sessionIdFromName(tmuxSessionName(id), SHELL_TMUX_PREFIX)).toBeUndefined();
@@ -66,7 +93,7 @@ describe("エージェントとシェルの前置き", () => {
 
   it("一覧も前置きで振り分ける", () => {
     const stdout = [
-      `${AGENT_TMUX_PREFIX}abc\t/work\t1700000000`,
+      `${AGENT_TMUX_PREFIX}claude-abc\t/work\t1700000000`,
       `${SHELL_TMUX_PREFIX}abc\t/work\t1700000001`,
       "",
     ].join("\n");
@@ -79,7 +106,7 @@ describe("エージェントとシェルの前置き", () => {
 
 describe("buildAgentCommand", () => {
   const command = buildAgentCommand({
-    agentBin: "claude",
+    bin: "claude",
     args: ["--session-id", "abc"],
     sessionId: "abc",
     port: 8787,
@@ -167,7 +194,15 @@ describe("buildAttachArgs / buildKillArgs / buildListArgs", () => {
 describe("parseListSessions", () => {
   it("rostr のセッションを取り出す", () => {
     const parsed = parseListSessions("rostr-abc\t/work\t1700000000\n");
-    expect(parsed).toEqual([{ id: "abc", cwd: "/work", createdAt: 1_700_000_000_000 }]);
+    expect(parsed).toEqual([
+      {
+        name: "rostr-abc",
+        id: "abc",
+        agent: "claude",
+        cwd: "/work",
+        createdAt: 1_700_000_000_000,
+      },
+    ]);
   });
 
   it("rostr 以外のセッションは無視する", () => {

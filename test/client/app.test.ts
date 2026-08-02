@@ -48,6 +48,7 @@ class FakeEventSource {
 
 const session = (over: Partial<SessionView>): SessionView => ({
   id: "id",
+  agent: "claude",
   cwd: "/tmp/proj",
   title: "proj",
   state: "idle",
