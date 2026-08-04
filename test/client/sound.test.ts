@@ -13,4 +13,12 @@ describe("playNotificationSound", () => {
 
     expect(playSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("done では done.mp3 を再生する", () => {
+    const playSpy = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue();
+
+    playNotificationSound("done");
+
+    expect(playSpy).toHaveBeenCalledTimes(1);
+  });
 });
