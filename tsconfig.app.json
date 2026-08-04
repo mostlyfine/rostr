@@ -6,6 +6,7 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "strict": true,
     "noUnusedLocals": true,
+    "types": ["vite/client"],
     "paths": {
       "@common/*": ["./common/*"]
     }
