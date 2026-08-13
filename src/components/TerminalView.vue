@@ -28,11 +28,19 @@ const props = withDefaults(
 const { theme: currentTheme } = useTheme();
 const { scale: fontScale } = useFontScale();
 
+/** サーバ再起動やスリープ復帰で切れた WebSocket を張り直すまでの間隔。 */
+const RECONNECT_MS = 1_000;
+
 const host = ref<HTMLDivElement | null>(null);
 let term: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
 let socket: WebSocket | null = null;
 let observer: ResizeObserver | null = null;
+/** 意図した切断（unmount）かどうか。true の間は close イベントが来ても張り直さない。 */
+let stopped = false;
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+/** connect() のたびに作り直す。使い回すと 2 回目以降の再接続で DA 応答の抑制が働かない。 */
+let replayGate: ReturnType<typeof createReplayGate> | null = null;
 /** 文字が描かれている領域。ホイールの位置をセル座標へ直すのに寸法が要る。 */
 let screen: HTMLElement | null = null;
 /** 1 セルの大きさ。ホイールのたびに測るとレイアウトを叩くので、fit のときだけ測り直す。 */
@@ -95,9 +103,8 @@ onMounted(() => {
   // 送った Device Attributes の問い合わせがそのまま含まれている。xterm はこれを書き込む
   // 際に自動応答を作ってしまうが、tmux はもう問い合わせを待っておらず、応答をただの
   // 入力としてシェルへ素通ししてしまう。replay の書き込み中だけその応答を捨てる。
-  const replayGate = createReplayGate(term);
   term.onData((data) => {
-    if (replayGate.shouldSuppress()) return;
+    if (replayGate?.shouldSuppress()) return;
     send({ type: "input", data });
   });
   // Shift+Enter だけは xterm の既定（CR 送出）を止めて自前で送る。claude の /terminal-setup が
@@ -134,18 +141,31 @@ onMounted(() => {
     return false;
   });
 
-  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const kind = props.kind === "shell" ? "&kind=shell" : "";
-  socket = new WebSocket(`${protocol}//${location.host}/ws?session=${props.sessionId}${kind}`);
-  // サーバは接続直後にスクロールバックを、その後は PTY の出力をそのまま送ってくる。
-  socket.onmessage = (event) => void replayGate.write(event.data as string);
-  socket.onopen = () => fit();
+  connect();
 
   observer = new ResizeObserver(scheduleFit);
   observer.observe(host.value!);
 
   if (props.visible) fit();
 });
+
+/**
+ * WebSocket を張る。close イベントが来て意図した切断（unmount）でなければ張り直すので、
+ * ノート PC のスリープ復帰やサーバ再起動の後もキー入力が黙って死んだままにならない。
+ */
+const connect = () => {
+  replayGate = createReplayGate(term!);
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  const kind = props.kind === "shell" ? "&kind=shell" : "";
+  socket = new WebSocket(`${protocol}//${location.host}/ws?session=${props.sessionId}${kind}`);
+  // サーバは接続直後にスクロールバックを、その後は PTY の出力をそのまま送ってくる。
+  socket.onmessage = (event) => void replayGate?.write(event.data as string);
+  socket.onopen = () => fit();
+  socket.onclose = () => {
+    if (stopped) return;
+    reconnectTimer = setTimeout(connect, RECONNECT_MS);
+  };
+};
 
 /** 非表示中は寸法が 0 なので、表示に戻った直後に測り直してからフォーカスする。 */
 const focus = () => {
@@ -181,6 +201,8 @@ watch(fontScale, (scale) => {
 defineExpose({ focus, hasFocus });
 
 onBeforeUnmount(() => {
+  stopped = true;
+  clearTimeout(reconnectTimer);
   observer?.disconnect();
   // 予約が残っていると、破棄した端末に対して測り直しが走る。
   if (pendingFit) cancelAnimationFrame(pendingFit);
