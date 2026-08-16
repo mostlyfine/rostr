@@ -1,9 +1,8 @@
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vitest/config";
-import vue from "@vitejs/plugin-vue";
 
 export default defineConfig({
-  plugins: [vue()],
+  esbuild: { jsxImportSource: "hono/jsx/dom" },
   resolve: {
     alias: { "@common": fileURLToPath(new URL("./common", import.meta.url)) },
   },
@@ -12,7 +11,7 @@ export default defineConfig({
     projects: [
       {
         extends: true,
-        test: { name: "client", include: ["test/client/**/*.test.ts"], environment: "jsdom" },
+        test: { name: "client", include: ["test/client/**/*.test.{ts,tsx}"], environment: "jsdom" },
       },
       {
         extends: true,

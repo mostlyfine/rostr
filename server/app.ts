@@ -1,12 +1,20 @@
 import { existsSync } from "node:fs";
-import express from "express";
-import type { Express, Request, Response } from "express";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { Hono } from "hono";
+import type { Context } from "hono";
+import { streamSSE } from "hono/streaming";
 import { isAgentKind } from "../common/agents";
 import type { HookEvent, SessionView } from "../common/types";
 import type { SessionManager } from "./sessions";
 
+/** 本文が無い・JSON として壊れている場合は null。呼び手が普段どおり 400 を返せるようにする。 */
+const readJson = async (c: Context): Promise<Record<string, unknown> | null> => {
+  const body: unknown = await c.req.json().catch(() => null);
+  return typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
+};
+
 /**
- * REST と SSE を提供する Express アプリを作る。WebSocket は index.ts 側で載せる。
+ * REST と SSE を提供する Hono アプリを作る。WebSocket は index.ts 側で載せる。
  * shells はスプリットで開くシェルの管理者で、親エージェントと同じ id でセッションを持つ。
  * distDir を渡すと、ビルド済みのフロントエンドも同じポートから配信する。
  */
@@ -14,111 +22,102 @@ export const createApp = (
   manager: SessionManager,
   shells: SessionManager,
   distDir?: string,
-): Express => {
-  const app = express();
-  app.use(express.json({ limit: "1mb" }));
+): Hono => {
+  const app = new Hono();
 
   /** クライアントへ配る一覧。スプリットの開閉はシェルが居るかどうかで表す。 */
   const listView = (): SessionView[] =>
     manager.list().map((session) => ({ ...session, shell: shells.get(session.id) !== undefined }));
 
-  app.get("/api/sessions", (_req: Request, res: Response) => {
-    res.json(listView());
-  });
+  app.get("/api/sessions", (c) => c.json(listView()));
 
-  app.post("/api/sessions", (req: Request, res: Response) => {
-    const cwd = req.body?.cwd;
+  app.post("/api/sessions", async (c) => {
+    const body = await readJson(c);
+    const cwd = body?.cwd;
     if (typeof cwd !== "string" || cwd.trim() === "") {
-      res.status(400).json({ error: "cwd を指定してください" });
-      return;
+      return c.json({ error: "cwd を指定してください" }, 400);
     }
-    const suppliedAgent = req.body?.agent;
+    const suppliedAgent = body?.agent;
     const agent = suppliedAgent === undefined ? "claude" : suppliedAgent;
     if (!isAgentKind(agent)) {
-      res.status(400).json({ error: "agent が不正です" });
-      return;
+      return c.json({ error: "agent が不正です" }, 400);
     }
     try {
-      res.status(201).json(manager.create(cwd.trim(), agent));
+      return c.json(manager.create(cwd.trim(), agent), 201);
     } catch (error) {
-      res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
     }
   });
 
-  app.delete("/api/sessions/:id", (req: Request, res: Response) => {
-    if (!manager.kill(String(req.params.id))) {
-      res.status(404).json({ error: "セッションが見つかりません" });
-      return;
+  app.delete("/api/sessions/:id", (c) => {
+    if (!manager.kill(c.req.param("id"))) {
+      return c.json({ error: "セッションが見つかりません" }, 404);
     }
-    res.status(204).end();
+    return c.body(null, 204);
   });
 
   // スプリットで開くシェル。id はセッションと共有し、cwd もセッションのものをそのまま使う。
-  app.post("/api/sessions/:id/shell", (req: Request, res: Response) => {
-    const id = String(req.params.id);
+  app.post("/api/sessions/:id/shell", (c) => {
+    const id = c.req.param("id");
     const session = manager.get(id);
     if (!session) {
-      res.status(404).json({ error: "セッションが見つかりません" });
-      return;
+      return c.json({ error: "セッションが見つかりません" }, 404);
     }
     // 開き直しを押しても増えないよう、既に居れば何もしない。
     if (shells.get(id)) {
-      res.status(204).end();
-      return;
+      return c.body(null, 204);
     }
     try {
       shells.createWithId(session.cwd, id);
-      res.status(201).end();
+      return c.body(null, 201);
     } catch (error) {
-      res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
     }
   });
 
-  app.delete("/api/sessions/:id/shell", (req: Request, res: Response) => {
-    if (!shells.kill(String(req.params.id))) {
-      res.status(404).json({ error: "シェルが見つかりません" });
-      return;
+  app.delete("/api/sessions/:id/shell", (c) => {
+    if (!shells.kill(c.req.param("id"))) {
+      return c.json({ error: "シェルが見つかりません" }, 404);
     }
-    res.status(204).end();
+    return c.body(null, 204);
   });
 
   // hook スクリプトからの通知。ここで失敗を返すと Claude 本体が止まるので常に 204 を返す。
-  app.post("/api/hook/:id", (req: Request, res: Response) => {
-    const event = req.body as HookEvent | undefined;
+  app.post("/api/hook/:id", async (c) => {
+    const event = (await readJson(c)) as HookEvent | null;
     if (event && typeof event.hook_event_name === "string") {
-      manager.applyHook(String(req.params.id), event);
+      manager.applyHook(c.req.param("id"), event);
     }
-    res.status(204).end();
+    return c.body(null, 204);
   });
 
-  app.get("/api/events", (_req: Request, res: Response) => {
-    res.writeHead(200, {
-      "content-type": "text/event-stream",
-      "cache-control": "no-cache",
-      connection: "keep-alive",
-      "x-accel-buffering": "no",
-    });
+  app.get("/api/events", (c) => {
+    c.header("x-accel-buffering", "no");
+    return streamSSE(c, async (stream) => {
+      const send = () => void stream.writeSSE({ data: JSON.stringify(listView()) });
+      send();
 
-    const send = () => res.write(`data: ${JSON.stringify(listView())}\n\n`);
-    send();
+      // シェルの開閉も一覧の内容（shell フラグ）を変えるので、両方を購読する。
+      const unsubscribe = manager.onChange(send);
+      const unsubscribeShells = shells.onChange(send);
+      // プロキシに切られないための定期的な空コメント。
+      const heartbeat = setInterval(() => void stream.write(": ping\n\n"), 30_000);
 
-    // シェルの開閉も一覧の内容（shell フラグ）を変えるので、両方を購読する。
-    const unsubscribe = manager.onChange(send);
-    const unsubscribeShells = shells.onChange(send);
-    // プロキシに切られないための定期的な空コメント。
-    const heartbeat = setInterval(() => res.write(": ping\n\n"), 30_000);
-
-    res.on("close", () => {
-      clearInterval(heartbeat);
-      unsubscribe();
-      unsubscribeShells();
-      res.end();
+      // このコールバックが解決するとストリームが閉じるので、切断されるまで待ち続ける。
+      await new Promise<void>((resolve) => {
+        stream.onAbort(() => {
+          clearInterval(heartbeat);
+          unsubscribe();
+          unsubscribeShells();
+          resolve();
+        });
+      });
     });
   });
 
   // 開発中は vite が配信するので dist は無い。ビルド済みのときだけ配信する。
   if (distDir && existsSync(distDir)) {
-    app.use(express.static(distDir));
+    app.use("*", serveStatic({ root: distDir }));
   }
 
   return app;

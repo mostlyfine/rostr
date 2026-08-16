@@ -1,0 +1,16 @@
+/* 親は flex 行。表示中のペインだけが並ぶので、等分するには伸縮の基準を 0 にしておく。 */
+.terminal {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  padding: 6px;
+  box-sizing: border-box;
+  background: var(--bg-app);
+}
+.terminal.shell {
+  border-left: 1px solid var(--border);
+}
+/* 選ばれていないターミナルは場所を取らずに残す。破棄すると画面が作り直される。 */
+.terminal.hidden {
+  display: none;
+}

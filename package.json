@@ -20,39 +20,32 @@
     "dev": "concurrently -n server,vite -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "node --import tsx --watch server/index.ts",
     "dev:client": "vite",
-    "build": "vue-tsc -b && vite build",
+    "build": "tsc -b && vite build",
     "prepare": "npm run build",
     "server": "node --import tsx server/index.ts",
     "stop": "pid=$(lsof -tiTCP:${PORT:-8787} -sTCP:LISTEN) && kill $pid && echo \"stopped rostr server (pid $pid)\" || echo \"no rostr server listening on port ${PORT:-8787}\"",
-    "typecheck": "vue-tsc -b && tsc -p tsconfig.server.json",
+    "typecheck": "tsc -b && tsc -p tsconfig.server.json",
     "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
     "tmux:kill": "tmux -L rostr kill-server 2>/dev/null || true",
     "postinstall": "node scripts/fix-pty-perms.js"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
     "@xterm/xterm": "^6.0.0",
-    "express": "^5.1.0",
+    "hono": "^4.13.2",
     "node-pty": "^1.1.0-beta34",
     "tsx": "^4.19.2",
-    "vue": "^3.5.13",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
-    "@types/supertest": "^6.0.2",
     "@types/ws": "^8.5.13",
-    "@vitejs/plugin-vue": "^5.2.1",
-    "@vue/test-utils": "^2.4.6",
-    "@vue/tsconfig": "^0.7.0",
     "concurrently": "^9.1.0",
     "jsdom": "^25.0.1",
-    "supertest": "^7.0.0",
     "typescript": "~5.7.2",
     "vite": "^6.0.3",
-    "vitest": "^3.2.7",
-    "vue-tsc": "^2.1.10"
+    "vitest": "^3.2.7"
   }
 }

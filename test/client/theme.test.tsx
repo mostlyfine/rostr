@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mount } from "@vue/test-utils";
 import { THEME_KEY, loadTheme, nextTheme, saveTheme } from "../../src/theme";
 import type { Session } from "../../common/types";
+import { flush, mount } from "./helpers";
 
 beforeEach(() => {
   localStorage.clear();
@@ -49,42 +49,61 @@ describe("nextTheme", () => {
  * vi.resetModules() で作り直し、Sidebar も新しいインスタンスを掴むよう動的 import する。
  */
 const mountSidebar = async () => {
-  const Sidebar = (await import("../../src/components/Sidebar.vue")).default;
-  return mount(Sidebar, { props: { sessions: [] as Session[], selectedId: null } });
+  const { Sidebar } = await import("../../src/components/Sidebar");
+  const noop = () => {};
+  const wrapper = mount(
+    <Sidebar
+      sessions={[] as Session[]}
+      selectedId={null}
+      onSelect={noop}
+      onClose={noop}
+      onCreate={noop}
+    />,
+  );
+  await flush();
+  return wrapper;
 };
 
 const currentTheme = () => document.documentElement.dataset.theme;
 
 describe("テーマトグル", () => {
+  const mounted: { unmount: () => void }[] = [];
+
   beforeEach(() => {
     vi.resetModules();
   });
 
   afterEach(() => {
+    for (const wrapper of mounted.splice(0)) wrapper.unmount();
     delete document.documentElement.dataset.theme;
   });
 
+  const sidebar = async () => {
+    const wrapper = await mountSidebar();
+    mounted.push(wrapper);
+    return wrapper;
+  };
+
   it("既定では dark を適用する", async () => {
-    await mountSidebar();
+    await sidebar();
     expect(currentTheme()).toBe("dark");
   });
 
   it("押すたびに dark と light を往復し、選択を保存する", async () => {
-    const wrapper = await mountSidebar();
-    const toggle = wrapper.find("[data-test=theme-toggle]");
+    const wrapper = await sidebar();
 
-    await toggle.trigger("click");
+    await wrapper.click("[data-test=theme-toggle]");
     expect(currentTheme()).toBe("light");
     expect(localStorage.getItem(THEME_KEY)).toBe("light");
 
-    await toggle.trigger("click");
+    await wrapper.click("[data-test=theme-toggle]");
     expect(currentTheme()).toBe("dark");
     expect(localStorage.getItem(THEME_KEY)).toBe("dark");
   });
 
   it("保存済みの選択を反映する", async () => {
     localStorage.setItem(THEME_KEY, "light");
-    await mountSidebar();
+    await sidebar();
     expect(currentTheme()).toBe("light");
   });
 });

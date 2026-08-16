@@ -1,5 +1,5 @@
-import { createServer } from "node:http";
 import { dirname, join } from "node:path";
+import { createAdaptorServer } from "@hono/node-server";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { ClientMessage } from "../common/types";
@@ -49,7 +49,8 @@ manager.onChange(() => {
 });
 
 const app = createApp(manager, shells, join(here, "..", "dist"));
-const server = createServer(app);
+// serve() は即 listen してしまうので、upgrade ハンドラを張ってから自分で listen する。
+const server = createAdaptorServer({ fetch: app.fetch });
 const wss = new WebSocketServer({ noServer: true });
 
 server.on("upgrade", (req, socket, head) => {

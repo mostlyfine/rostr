@@ -1,69 +1,3 @@
-<script setup lang="ts">
-import { computed } from "vue";
-import type { Session } from "../../common/types";
-import { toSidebarRows } from "../sessionGroups";
-import { useTheme } from "../composables/useTheme";
-import { useSoundSettings } from "../composables/useSoundSettings";
-import SessionItem from "./SessionItem.vue";
-
-const props = defineProps<{ sessions: Session[]; selectedId: string | null }>();
-const emit = defineEmits<{ select: [id: string]; close: [id: string]; create: [] }>();
-
-const rows = computed(() => toSidebarRows(props.sessions));
-const { label: themeLabel, toggle: toggleTheme } = useTheme();
-const { label: soundLabel, toggle: toggleSound } = useSoundSettings();
-</script>
-
-<template>
-  <aside class="sidebar">
-    <header class="header">
-      <h1>rostr</h1>
-      <div class="actions">
-        <button
-          class="sound"
-          data-test="sound-toggle"
-          :title="soundLabel.title"
-          @click="toggleSound()"
-        >
-          {{ soundLabel.icon }}
-        </button>
-        <button
-          class="theme"
-          data-test="theme-toggle"
-          :title="themeLabel.title"
-          @click="toggleTheme()"
-        >
-          {{ themeLabel.icon }}
-        </button>
-        <button class="new" data-test="new-session" @click="emit('create')">+ New</button>
-      </div>
-    </header>
-
-    <div class="list">
-      <p v-if="props.sessions.length === 0" class="empty">
-        No agents. Click "+ New" to launch one.
-      </p>
-
-      <TransitionGroup tag="ul" name="row" class="rows">
-        <template v-for="row in rows" :key="row.key">
-          <li v-if="row.kind === 'header'" class="group-label" :class="row.state">
-            <span data-test="group-label">{{ row.label }}</span>
-            <span class="count">{{ row.count }}</span>
-          </li>
-          <SessionItem
-            v-else
-            :session="row.session"
-            :selected="row.session.id === props.selectedId"
-            @select="emit('select', $event)"
-            @close="emit('close', $event)"
-          />
-        </template>
-      </TransitionGroup>
-    </div>
-  </aside>
-</template>
-
-<style scoped>
 .sidebar {
   /* 文字だけ大きくすると幅が足りずセッション名が読めなくなるので、幅も倍率に追従させる。 */
   width: calc(320px * var(--font-scale));
@@ -73,26 +7,26 @@ const { label: soundLabel, toggle: toggleSound } = useSoundSettings();
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
 }
-.header {
+.sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px;
   border-bottom: 1px solid var(--border);
 }
-h1 {
+.sidebar-title {
   margin: 0;
   font-size: var(--fs-lg);
   color: var(--text-strong);
 }
-.actions {
+.sidebar-actions {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.new,
-.theme,
-.sound {
+.sidebar-new,
+.sidebar-theme,
+.sidebar-sound {
   border: 1px solid var(--border-control);
   background: var(--bg-control);
   color: var(--text);
@@ -101,23 +35,23 @@ h1 {
   border-radius: 5px;
   cursor: pointer;
 }
-.new:hover,
-.theme:hover,
-.sound:hover {
+.sidebar-new:hover,
+.sidebar-theme:hover,
+.sidebar-sound:hover {
   background: var(--bg-control-hover);
 }
 /* 絵文字1文字なので、+ New と高さを揃えつつ左右を詰める。 */
-.theme,
-.sound {
+.sidebar-theme,
+.sidebar-sound {
   padding: 4px 7px;
   line-height: 1.35;
 }
-.list {
+.sidebar-list {
   flex: 1;
   overflow-y: auto;
   padding: 8px;
 }
-.empty {
+.sidebar-empty {
   color: var(--text-muted);
   font-size: var(--fs-sm);
   line-height: 1.6;
@@ -136,7 +70,7 @@ h1 {
 .group-label:not(:first-child) {
   margin-top: 12px;
 }
-.count {
+.group-count {
   background: var(--bg-badge);
   color: var(--text-secondary);
   border-radius: 8px;
@@ -149,15 +83,15 @@ h1 {
  * idle と exited は「まだ手が要らない」「もう終わった」状態で目を引く必要がないので、
  * 彩度を与えず既定のグレーのままにする。
  */
-.group-label.waiting .count {
+.group-label.waiting .group-count {
   background: var(--state-waiting);
   color: var(--state-badge-fg);
 }
-.group-label.working .count {
+.group-label.working .group-count {
   background: var(--state-working);
   color: var(--state-badge-fg);
 }
-.group-label.done .count {
+.group-label.done .group-count {
   background: var(--state-done);
   color: var(--state-badge-fg);
 }
@@ -178,27 +112,31 @@ h1 {
   margin-top: 2px;
 }
 
-/* 状態が変わった行が別のグループへ動く様子を追えるようにする。 */
-.row-move {
-  transition: transform 260ms ease;
+/*
+ * 現れた行をフェードで出す。挿入されたときに一度だけ流れるので、
+ * 再描画のたびにやり直されることはない。点滅中の行は .item.blink 側の
+ * animation が勝つので、そちらの見た目を邪魔しない。
+ */
+.rows > li {
+  animation: row-enter 160ms ease;
 }
-.row-enter-active,
-.row-leave-active {
-  transition: opacity 160ms ease;
-}
-.row-enter-from,
-.row-leave-to {
-  opacity: 0;
+@keyframes row-enter {
+  from {
+    opacity: 0;
+  }
 }
 /*
- * 消えていく行を流れから外し、残った行がその場で詰まれるようにする。
+ * 消えていく行。useLeaveTransition が中身と位置を残している間だけこのクラスが付く。
+ * 流れから外して、残った行がその場で詰まれるようにする。
  * 流れから外れた行は詰まってきた行の上に重なる。opacity が 0 でもクリックは受け取ってしまい、
  * 下の行を選べなくなるので、消えていく行は当たり判定から外す。
  */
-.row-leave-active {
+.rows > li.row-leaving {
   position: absolute;
   left: 0;
   right: 0;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+  animation: none;
 }
-</style>

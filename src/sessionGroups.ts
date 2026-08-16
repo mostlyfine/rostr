@@ -22,8 +22,8 @@ export type SidebarRow =
 /**
  * 状態ごとにまとめたうえで、見出しとセッションを1列へ平らに並べる。該当が無い状態は落とす。
  * 同じ状態の中は作成が古い順。サーバの一覧は tmux から復元したときに順序が変わるので、ここで決める。
- * 状態をまたぐ行の移動をアニメーションさせるには、TransitionGroup の親が1つである必要があるため、
- * グループごとにリストを分けずにこの形にしている。
+ * グループごとにリストを分けないのは、見出しとセッションを 1 つの ul に収めて、
+ * 状態をまたいで動く行にも同じ入退場の扱いを効かせるため。
  */
 export const toSidebarRows = (sessions: Session[]): SidebarRow[] =>
   STATE_ORDER.flatMap((state): SidebarRow[] => {

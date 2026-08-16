@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h, nextTick } from "vue";
-import { type VueWrapper, mount } from "@vue/test-utils";
+import { forwardRef } from "hono/jsx/dom";
 import type { SessionView } from "../../common/types";
-import NewSessionDialog from "../../src/components/NewSessionDialog.vue";
 import { FONT_SCALE_KEY } from "../../src/fontScale";
+import { useOptionalHandle } from "../../src/hooks/useOptionalHandle";
 import { SOUND_ENABLED_KEY } from "../../src/soundSettings";
+import { flush, mount, type Wrapper } from "./helpers";
 
 const focusSpy = vi.fn();
 const playNotificationSoundMock = vi.fn();
@@ -15,20 +15,17 @@ let fetchMock: ReturnType<typeof vi.fn>;
 vi.mock("../../src/sound.ts", () => ({ playNotificationSound: playNotificationSoundMock }));
 
 // xterm.js は jsdom で動かないので、ターミナルは focus/hasFocus だけ持つスタブに差し替える。
-vi.mock("../../src/components/TerminalView.vue", () => ({
-  default: defineComponent({
-    name: "TerminalView",
-    props: {
-      sessionId: { type: String, required: true },
-      visible: { type: Boolean, required: true },
-      kind: { type: String, default: "agent" },
-    },
-    setup(props, { expose }) {
-      // シェルのペインは id を親と共有するので、フォーカス先の区別に kind を前置きする。
-      const name = () => (props.kind === "shell" ? `shell:${props.sessionId}` : props.sessionId);
-      expose({ focus: () => focusSpy(name()), hasFocus: () => hasFocusReturn });
-      return () => h("div", { class: "terminal-stub", "data-test-kind": props.kind });
-    },
+vi.mock("../../src/components/TerminalView", () => ({
+  TerminalView: forwardRef<
+    { focus: () => void; hasFocus: () => boolean },
+    { sessionId: string; visible: boolean; kind?: "agent" | "shell" }
+  >(({ sessionId, visible, kind = "agent" }, ref) => {
+    // シェルのペインは id を親と共有するので、フォーカス先の区別に kind を前置きする。
+    const name = kind === "shell" ? `shell:${sessionId}` : sessionId;
+    useOptionalHandle(ref, () => ({ focus: () => focusSpy(name), hasFocus: () => hasFocusReturn }));
+    return (
+      <div class="terminal-stub" data-test-kind={kind} data-test-visible={String(visible)} />
+    );
   }),
 }));
 
@@ -62,12 +59,23 @@ const session = (over: Partial<SessionView>): SessionView => ({
   ...over,
 });
 
+const mounted: Wrapper[] = [];
+
 const mountApp = async (sessions: SessionView[]) => {
-  const App = (await import("../../src/App.vue")).default;
-  const wrapper = mount(App, { attachTo: document.body });
+  const { App } = await import("../../src/App");
+  const wrapper = mount(<App />);
+  mounted.push(wrapper);
+  // EventSource が張られるのは useEffect の中なので、まず描画の完了を待つ。
+  await flush();
   FakeEventSource.instances.at(-1)!.emit(sessions);
-  await nextTick();
+  await flush();
   return wrapper;
+};
+
+/** サーバから新しい一覧が届いた状況を作る。 */
+const emit = async (sessions: SessionView[]) => {
+  FakeEventSource.instances.at(-1)!.emit(sessions);
+  await flush();
 };
 
 beforeEach(() => {
@@ -81,25 +89,32 @@ beforeEach(() => {
   localStorage.clear();
 });
 
+afterEach(() => {
+  // 画面全体に張ったキー購読を残すと、次のテストの App と二重に効いてしまう。
+  for (const wrapper of mounted.splice(0)) wrapper.unmount();
+});
+
 describe("App のフォーカス制御", () => {
   it("サイドバーのセッションを選ぶとそのターミナルにフォーカスが移る", async () => {
     const wrapper = await mountApp([session({ id: "a" })]);
 
-    await wrapper.find("[data-test=session-body]").trigger("click");
-    await nextTick();
+    await wrapper.click("[data-test=session-body]");
 
     expect(focusSpy).toHaveBeenCalledWith("a");
   });
 
   describe("新規セッション作成", () => {
     it("ダイアログのディレクトリとエージェントを作成リクエストへ渡す", async () => {
-      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => session({ id: "codex", agent: "codex" }) });
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => session({ id: "codex", agent: "codex" }),
+      });
       const wrapper = await mountApp([]);
-      await wrapper.find("[data-test=new-session]").trigger("click");
+      await wrapper.click("[data-test=new-session]");
 
-      wrapper.findComponent(NewSessionDialog).vm.$emit("submit", "/tmp/proj", "codex");
-      await nextTick();
-      await nextTick();
+      await wrapper.setValue("input", "/tmp/proj");
+      await wrapper.select("[data-test=agent]", "codex");
+      await wrapper.submit("form");
 
       expect(fetchMock).toHaveBeenCalledWith("/api/sessions", {
         method: "POST",
@@ -112,12 +127,10 @@ describe("App のフォーカス制御", () => {
   it("選択中のセッションを再クリックしてもフォーカスが移る", async () => {
     const wrapper = await mountApp([session({ id: "a" })]);
 
-    await wrapper.find("[data-test=session-body]").trigger("click");
-    await nextTick();
+    await wrapper.click("[data-test=session-body]");
     focusSpy.mockClear();
 
-    await wrapper.find("[data-test=session-body]").trigger("click");
-    await nextTick();
+    await wrapper.click("[data-test=session-body]");
 
     expect(focusSpy).toHaveBeenCalledWith("a");
   });
@@ -125,13 +138,10 @@ describe("App のフォーカス制御", () => {
   it("別のセッションへ切り替えると切り替え先にフォーカスが移る", async () => {
     const wrapper = await mountApp([session({ id: "a" }), session({ id: "b", title: "other" })]);
 
-    const items = wrapper.findAll("[data-test=session-body]");
-    await items[0].trigger("click");
-    await nextTick();
+    await wrapper.click("[data-test=session-body]");
     focusSpy.mockClear();
 
-    await items[1].trigger("click");
-    await nextTick();
+    await wrapper.click("[data-test=session-body]", 1);
 
     expect(focusSpy).toHaveBeenCalledWith("b");
     expect(focusSpy).not.toHaveBeenCalledWith("a");
@@ -140,8 +150,7 @@ describe("App のフォーカス制御", () => {
   it("x ボタンではフォーカスも選択も動かさない", async () => {
     const wrapper = await mountApp([session({ id: "a" }), session({ id: "b" })]);
 
-    await wrapper.findAll("[data-test=session-close]")[1].trigger("click");
-    await nextTick();
+    await wrapper.click("[data-test=session-close]", 1);
 
     expect(focusSpy).not.toHaveBeenCalled();
   });
@@ -149,83 +158,72 @@ describe("App のフォーカス制御", () => {
   it("選択中のセッションが消えたら残ったセッションへフォーカスが移る", async () => {
     const wrapper = await mountApp([session({ id: "a" }), session({ id: "b" })]);
 
-    await wrapper.findAll("[data-test=session-body]")[0].trigger("click");
-    await nextTick();
+    await wrapper.click("[data-test=session-body]");
     focusSpy.mockClear();
 
     // サーバから a が消えた一覧が届く。
-    FakeEventSource.instances.at(-1)!.emit([session({ id: "b" })]);
-    await nextTick();
-    await nextTick();
+    await emit([session({ id: "b" })]);
 
     expect(focusSpy).toHaveBeenCalledWith("b");
   });
 });
 
 describe("ターミナルのスプリット", () => {
-  const selectFirst = async (wrapper: Awaited<ReturnType<typeof mountApp>>) => {
-    await wrapper.find("[data-test=session-body]").trigger("click");
-    await nextTick();
-  };
-
   it("セッションを選ぶまでスプリットボタンは出ない", async () => {
     const wrapper = await mountApp([session({ id: "a" })]);
-    expect(wrapper.find("[data-test=split-toggle]").exists()).toBe(false);
+    expect(wrapper.find("[data-test=split-toggle]")).toBeNull();
   });
 
   it("押すと選択中セッションのシェルを開く", async () => {
     const wrapper = await mountApp([session({ id: "a" })]);
-    await selectFirst(wrapper);
+    await wrapper.click("[data-test=session-body]");
 
-    await wrapper.find("[data-test=split-toggle]").trigger("click");
+    await wrapper.click("[data-test=split-toggle]");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/sessions/a/shell", { method: "POST" });
   });
 
   it("シェルが開いているセッションではペインが 2 枚並ぶ", async () => {
     const wrapper = await mountApp([session({ id: "a", shell: true })]);
-    await selectFirst(wrapper);
+    await wrapper.click("[data-test=session-body]");
 
     const panes = wrapper.findAll(".terminal-stub");
-    expect(panes.map((pane) => pane.attributes("data-test-kind"))).toEqual(["agent", "shell"]);
+    expect(panes.map((pane) => pane.dataset.testKind)).toEqual(["agent", "shell"]);
   });
 
   it("シェルが開いていなければペインは 1 枚", async () => {
     const wrapper = await mountApp([session({ id: "a" })]);
-    await selectFirst(wrapper);
+    await wrapper.click("[data-test=session-body]");
     expect(wrapper.findAll(".terminal-stub")).toHaveLength(1);
   });
 
   it("開いている状態で押すとシェルを閉じる", async () => {
     const wrapper = await mountApp([session({ id: "a", shell: true })]);
-    await selectFirst(wrapper);
+    await wrapper.click("[data-test=session-body]");
 
-    await wrapper.find("[data-test=split-toggle]").trigger("click");
+    await wrapper.click("[data-test=split-toggle]");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/sessions/a/shell", { method: "DELETE" });
   });
 
   it("開いたシェルにフォーカスが移る", async () => {
     const wrapper = await mountApp([session({ id: "a" })]);
-    await selectFirst(wrapper);
+    await wrapper.click("[data-test=session-body]");
     focusSpy.mockClear();
 
-    await wrapper.find("[data-test=split-toggle]").trigger("click");
+    await wrapper.click("[data-test=split-toggle]");
     // シェルが現れるのはサーバが shell: true を配ってから。
-    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", shell: true })]);
-    await nextTick();
-    await nextTick();
+    await emit([session({ id: "a", shell: true })]);
 
     expect(focusSpy).toHaveBeenCalledWith("shell:a");
   });
 
   it("閉じたら claude のターミナルへフォーカスが戻る", async () => {
     const wrapper = await mountApp([session({ id: "a", shell: true })]);
-    await selectFirst(wrapper);
+    await wrapper.click("[data-test=session-body]");
     focusSpy.mockClear();
 
-    await wrapper.find("[data-test=split-toggle]").trigger("click");
-    await nextTick();
+    await wrapper.click("[data-test=split-toggle]");
 
     expect(focusSpy).toHaveBeenCalledWith("a");
   });
@@ -233,37 +231,31 @@ describe("ターミナルのスプリット", () => {
 
 describe("waiting/done への自動フォーカス", () => {
   it("選択中でないセッションが waiting になり、選択中ターミナルにフォーカスが無ければ自動で切り替わる", async () => {
-    const wrapper = await mountApp([session({ id: "a", state: "working" }), session({ id: "b", state: "working" })]);
+    const wrapper = await mountApp([
+      session({ id: "a", state: "working" }),
+      session({ id: "b", state: "working" }),
+    ]);
 
-    await wrapper.findAll("[data-test=session-body]")[0].trigger("click");
-    await nextTick();
+    await wrapper.click("[data-test=session-body]");
     focusSpy.mockClear();
     hasFocusReturn = false;
 
-    FakeEventSource.instances.at(-1)!.emit([
-      session({ id: "a", state: "working" }),
-      session({ id: "b", state: "waiting" }),
-    ]);
-    await nextTick();
-    await nextTick();
+    await emit([session({ id: "a", state: "working" }), session({ id: "b", state: "waiting" })]);
 
     expect(focusSpy).toHaveBeenCalledWith("b");
   });
 
   it("選択中ターミナルにフォーカスがある場合は自動切り替えしない", async () => {
-    const wrapper = await mountApp([session({ id: "a", state: "working" }), session({ id: "b", state: "working" })]);
+    const wrapper = await mountApp([
+      session({ id: "a", state: "working" }),
+      session({ id: "b", state: "working" }),
+    ]);
 
-    await wrapper.findAll("[data-test=session-body]")[0].trigger("click");
-    await nextTick();
+    await wrapper.click("[data-test=session-body]");
     focusSpy.mockClear();
     hasFocusReturn = true;
 
-    FakeEventSource.instances.at(-1)!.emit([
-      session({ id: "a", state: "working" }),
-      session({ id: "b", state: "waiting" }),
-    ]);
-    await nextTick();
-    await nextTick();
+    await emit([session({ id: "a", state: "working" }), session({ id: "b", state: "waiting" })]);
 
     expect(focusSpy).not.toHaveBeenCalled();
   });
@@ -271,13 +263,10 @@ describe("waiting/done への自動フォーカス", () => {
   it("選択中のセッション自身が waiting になっても自動切り替えは起きない", async () => {
     const wrapper = await mountApp([session({ id: "a", state: "working" })]);
 
-    await wrapper.find("[data-test=session-body]").trigger("click");
-    await nextTick();
+    await wrapper.click("[data-test=session-body]");
     focusSpy.mockClear();
 
-    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", state: "waiting" })]);
-    await nextTick();
-    await nextTick();
+    await emit([session({ id: "a", state: "waiting" })]);
 
     expect(focusSpy).not.toHaveBeenCalled();
   });
@@ -286,12 +275,7 @@ describe("waiting/done への自動フォーカス", () => {
     await mountApp([session({ id: "a", state: "idle" }), session({ id: "b", state: "working" })]);
     focusSpy.mockClear();
 
-    FakeEventSource.instances.at(-1)!.emit([
-      session({ id: "a", state: "idle" }),
-      session({ id: "b", state: "done" }),
-    ]);
-    await nextTick();
-    await nextTick();
+    await emit([session({ id: "a", state: "idle" }), session({ id: "b", state: "done" })]);
 
     expect(focusSpy).toHaveBeenCalledWith("b");
   });
@@ -307,9 +291,7 @@ describe("waiting/done のサウンド通知", () => {
     await mountApp([session({ id: "a", state: "working" })]);
     playNotificationSoundMock.mockClear();
 
-    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", state: "waiting" })]);
-    await nextTick();
-    await nextTick();
+    await emit([session({ id: "a", state: "waiting" })]);
 
     expect(playNotificationSoundMock).toHaveBeenCalledWith("waiting");
   });
@@ -318,9 +300,7 @@ describe("waiting/done のサウンド通知", () => {
     await mountApp([session({ id: "a", state: "working" })]);
     playNotificationSoundMock.mockClear();
 
-    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", state: "done" })]);
-    await nextTick();
-    await nextTick();
+    await emit([session({ id: "a", state: "done" })]);
 
     expect(playNotificationSoundMock).toHaveBeenCalledWith("done");
   });
@@ -329,9 +309,7 @@ describe("waiting/done のサウンド通知", () => {
     await mountApp([session({ id: "a", state: "idle" })]);
     playNotificationSoundMock.mockClear();
 
-    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", state: "working" })]);
-    await nextTick();
-    await nextTick();
+    await emit([session({ id: "a", state: "working" })]);
 
     expect(playNotificationSoundMock).not.toHaveBeenCalled();
   });
@@ -341,9 +319,7 @@ describe("waiting/done のサウンド通知", () => {
     await mountApp([session({ id: "a", state: "working" })]);
     playNotificationSoundMock.mockClear();
 
-    FakeEventSource.instances.at(-1)!.emit([session({ id: "a", state: "done" })]);
-    await nextTick();
-    await nextTick();
+    await emit([session({ id: "a", state: "done" })]);
 
     expect(playNotificationSoundMock).not.toHaveBeenCalled();
   });
@@ -363,8 +339,6 @@ describe("フォントサイズのショートカット", () => {
     return event;
   };
 
-  const toast = (wrapper: VueWrapper) => wrapper.find("[data-test=font-scale-toast]");
-
   beforeEach(() => {
     // useFontScale はモジュールスコープに倍率を持つので、テストごとに作り直す。
     vi.resetModules();
@@ -382,7 +356,7 @@ describe("フォントサイズのショートカット", () => {
     await mountApp([session({ id: "a" })]);
 
     press({ key: "+", code: "Equal" });
-    await nextTick();
+    await flush();
 
     expect(document.documentElement.style.getPropertyValue("--font-scale")).toBe("1.1");
   });
@@ -399,12 +373,15 @@ describe("フォントサイズのショートカット", () => {
     const wrapper = await mountApp([session({ id: "a" })]);
 
     press({ key: "+", code: "Equal" });
-    await nextTick();
-    expect(toast(wrapper).text()).toBe("110%");
+    await flush();
+    expect(wrapper.text("[data-test=font-scale-toast]")).toBe("110%");
 
     // jsdom は CSS アニメーションを走らせないので、終了を自分で伝える。
-    await toast(wrapper).trigger("animationend");
-    expect(toast(wrapper).exists()).toBe(false);
+    wrapper
+      .find("[data-test=font-scale-toast]")!
+      .dispatchEvent(new Event("animationend", { bubbles: true }));
+    await flush();
+    expect(wrapper.find("[data-test=font-scale-toast]")).toBeNull();
   });
 
   /** 上下限で頭打ちになったことは、同じ値がもう一度光ることで分かる。 */
@@ -413,8 +390,8 @@ describe("フォントサイズのショートカット", () => {
     const wrapper = await mountApp([session({ id: "a" })]);
 
     press({ key: "+", code: "Equal" });
-    await nextTick();
+    await flush();
 
-    expect(toast(wrapper).text()).toBe("160%");
+    expect(wrapper.text("[data-test=font-scale-toast]")).toBe("160%");
   });
 });

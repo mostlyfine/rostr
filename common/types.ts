@@ -13,7 +13,7 @@ export interface Session {
   state: AgentState;
   /** 直近の UserPromptSubmit の本文。 */
   prompt: string;
-  /** いま何をしているか。例: "Edit App.vue" */
+  /** いま何をしているか。例: "Edit App.tsx" */
   activity: string;
   /** 会話全体で何をしようとしているかの1行要約。未生成なら空文字。 */
   summary: string;

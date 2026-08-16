@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { nextTick } from "vue";
 import {
   DEFAULT_SCALE,
   FONT_SCALE_KEY,
@@ -86,14 +85,16 @@ describe("index.html の先読みスクリプト", () => {
 });
 
 /**
- * useFontScale はモジュールスコープに状態を持つシングルトンなので、テストごとに
+ * 倍率はモジュールスコープのストアが持つシングルトンなので、テストごとに
  * vi.resetModules() で作り直してから動的 import する。
+ * 変更の入口（increase/decrease/reset）はフックの外に置いてあるので、
+ * コンポーネントを描かずにそのまま呼べる。
  */
-const freshFontScale = async () => (await import("../../src/composables/useFontScale")).useFontScale();
+const freshFontScale = () => import("../../src/hooks/useFontScale");
 
 const currentScale = () => document.documentElement.style.getPropertyValue("--font-scale");
 
-describe("useFontScale", () => {
+describe("倍率ストア", () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -114,29 +115,26 @@ describe("useFontScale", () => {
   });
 
   it("拡大すると倍率を上げ、選択を保存する", async () => {
-    const { increase } = await freshFontScale();
+    const { increaseFontScale } = await freshFontScale();
 
-    increase();
-    await nextTick();
+    increaseFontScale();
     expect(currentScale()).toBe("1.1");
     expect(localStorage.getItem(FONT_SCALE_KEY)).toBe("110");
   });
 
   it("縮小すると倍率を下げ、選択を保存する", async () => {
-    const { decrease } = await freshFontScale();
+    const { decreaseFontScale } = await freshFontScale();
 
-    decrease();
-    await nextTick();
+    decreaseFontScale();
     expect(currentScale()).toBe("0.9");
     expect(localStorage.getItem(FONT_SCALE_KEY)).toBe("90");
   });
 
   it("リセットすると等倍に戻し、選択を保存する", async () => {
     localStorage.setItem(FONT_SCALE_KEY, "140");
-    const { reset } = await freshFontScale();
+    const { resetFontScale } = await freshFontScale();
 
-    reset();
-    await nextTick();
+    resetFontScale();
     expect(currentScale()).toBe("1");
     expect(localStorage.getItem(FONT_SCALE_KEY)).toBe(String(DEFAULT_SCALE));
   });
@@ -144,11 +142,11 @@ describe("useFontScale", () => {
   /** 上下限に張り付いた状態で押し続けても書き込まない。clamp 自体は nextFontScale の担当。 */
   it("倍率が変わらないときは保存しない", async () => {
     localStorage.setItem(FONT_SCALE_KEY, String(MAX_SCALE));
-    const { increase, scale } = await freshFontScale();
+    const { increaseFontScale } = await freshFontScale();
     localStorage.removeItem(FONT_SCALE_KEY);
 
-    increase();
-    expect(scale.value).toBe(MAX_SCALE);
+    increaseFontScale();
+    expect(currentScale()).toBe(String(MAX_SCALE / 100));
     expect(localStorage.getItem(FONT_SCALE_KEY)).toBeNull();
   });
 });

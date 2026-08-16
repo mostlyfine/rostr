@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h, nextTick } from "vue";
-import { mount } from "@vue/test-utils";
 import type { Session } from "../../common/types";
-import { useSessions } from "../../src/composables/useSessions";
+import { useSessions } from "../../src/hooks/useSessions";
+import { flush, mount } from "./helpers";
 
 /** EventSource の readyState。仕様どおりの値を使う。 */
 const CONNECTING = 0;
@@ -57,25 +56,24 @@ const session = (over: Partial<Session>): Session => ({
   ...over,
 });
 
-/** useSessions を動かすためだけのホスト。onUnmounted を効かせるために component が要る。 */
-const mountHost = () => {
-  let api: ReturnType<typeof useSessions>;
-  const wrapper = mount(
-    defineComponent({
-      setup() {
-        api = useSessions();
-        return () => h("div");
-      },
-    }),
-  );
-  // biome-ignore lint: setup は mount 中に必ず走る。
-  return { wrapper, api: api! };
+/** useSessions を動かすためだけのホスト。購読の後始末を効かせるために component が要る。 */
+const mountHost = async () => {
+  let latestApi: ReturnType<typeof useSessions> | null = null;
+  const Host = () => {
+    latestApi = useSessions();
+    return <div />;
+  };
+  const wrapper = mount(<Host />);
+  await flush();
+  // 描き直しのたびに新しい戻り値になるので、都度いまのものを読む。
+  return { wrapper, api: () => latestApi! };
 };
 
 const latest = () => FakeEventSource.instances.at(-1)!;
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  // requestAnimationFrame は偽物にしない。描画の完了待ちがこれを使う。
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   FakeEventSource.instances = [];
   vi.stubGlobal("EventSource", FakeEventSource);
 });
@@ -87,34 +85,37 @@ afterEach(() => {
 
 describe("useSessions の再接続", () => {
   it("恒久的に切れたら張り直し、一覧の更新を再開する", async () => {
-    const { api } = mountHost();
+    const { api, wrapper } = await mountHost();
     latest().emit([session({ id: "a", activity: "Bash npm test" })]);
-    await nextTick();
-    expect(api.sessions.value[0].activity).toBe("Bash npm test");
+    await flush();
+    expect(api().sessions[0].activity).toBe("Bash npm test");
 
     latest().failPermanently();
     await vi.runOnlyPendingTimersAsync();
 
     expect(FakeEventSource.instances).toHaveLength(2);
 
-    latest().emit([session({ id: "a", activity: "Edit App.vue" })]);
-    await nextTick();
-    expect(api.sessions.value[0].activity).toBe("Edit App.vue");
-    expect(api.connected.value).toBe(true);
+    latest().emit([session({ id: "a", activity: "Edit App.tsx" })]);
+    await flush();
+    expect(api().sessions[0].activity).toBe("Edit App.tsx");
+    expect(api().connected).toBe(true);
+    wrapper.unmount();
   });
 
   it("ブラウザが自力で繋ぎ直す切断では張り直さない", async () => {
-    const { api } = mountHost();
+    const { api, wrapper } = await mountHost();
 
     latest().failTemporarily();
     await vi.runOnlyPendingTimersAsync();
+    await flush();
 
     expect(FakeEventSource.instances).toHaveLength(1);
-    expect(api.connected.value).toBe(false);
+    expect(api().connected).toBe(false);
+    wrapper.unmount();
   });
 
   it("アンマウント後は張り直さない", async () => {
-    const { wrapper } = mountHost();
+    const { wrapper } = await mountHost();
 
     latest().failPermanently();
     wrapper.unmount();
@@ -133,42 +134,49 @@ describe("useSessions のシェル操作", () => {
 
   it("openShell はセッションのシェルを開く", async () => {
     const fetchMock = stubFetch({});
-    const { api } = mountHost();
+    const { api, wrapper } = await mountHost();
 
-    await api.openShell("abc");
+    await api().openShell("abc");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/sessions/abc/shell", { method: "POST" });
+    wrapper.unmount();
   });
 
   it("openShell はサーバのエラーメッセージを投げる", async () => {
     stubFetch({ ok: false, json: async () => ({ error: "起動できません" }) });
-    const { api } = mountHost();
+    const { api, wrapper } = await mountHost();
 
-    await expect(api.openShell("abc")).rejects.toThrow("起動できません");
+    await expect(api().openShell("abc")).rejects.toThrow("起動できません");
+    wrapper.unmount();
   });
 
   it("closeShell はセッションのシェルを閉じる", async () => {
     const fetchMock = stubFetch({});
-    const { api } = mountHost();
+    const { api, wrapper } = await mountHost();
 
-    await api.closeShell("abc");
+    await api().closeShell("abc");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/sessions/abc/shell", { method: "DELETE" });
+    wrapper.unmount();
   });
 });
 
 describe("useSessions の作成", () => {
   it("選んだ Codex を作成リクエストに含める", async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => session({ agent: "codex" }) }));
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => session({ agent: "codex" }),
+    }));
     vi.stubGlobal("fetch", fetchMock);
-    const { api } = mountHost();
+    const { api, wrapper } = await mountHost();
 
-    await api.create("/tmp/proj", "codex");
+    await api().create("/tmp/proj", "codex");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/sessions", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ cwd: "/tmp/proj", agent: "codex" }),
     });
+    wrapper.unmount();
   });
 });

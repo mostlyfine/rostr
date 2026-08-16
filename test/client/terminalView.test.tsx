@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { mount } from "@vue/test-utils";
-import TerminalView from "../../src/components/TerminalView.vue";
+import { TerminalView } from "../../src/components/TerminalView";
+import { flush, mount } from "./helpers";
 
 class FakeResizeObserver {
   observe = vi.fn();
@@ -41,11 +41,12 @@ class FakeWebSocket {
 
 const latest = () => FakeWebSocket.instances.at(-1)!;
 
-const mountTerminal = () =>
-  mount(TerminalView, {
-    props: { sessionId: "abc", visible: true },
-    attachTo: document.body,
-  });
+const mountTerminal = async () => {
+  const wrapper = mount(<TerminalView sessionId="abc" visible={true} />);
+  // xterm の生成と WebSocket の接続は useEffect の中なので、描画の完了を待つ。
+  await flush();
+  return wrapper;
+};
 
 // xterm は開くときに devicePixelRatio の変化を購読する。jsdom には matchMedia が無いので補う。
 // ResizeObserver も jsdom に無いので同様に補い、WebSocket は再接続を検証できる Fake に差し替える。
@@ -69,12 +70,11 @@ afterEach(() => {
 
 describe("TerminalView の WebSocket 再接続", () => {
   it("close イベントから RECONNECT_MS 経過で張り直す", async () => {
-    vi.useFakeTimers();
-    const wrapper = mountTerminal();
+    const wrapper = await mountTerminal();
 
     expect(FakeWebSocket.instances).toHaveLength(1);
     latest().triggerClose();
-    await vi.advanceTimersByTimeAsync(1_000);
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
 
     expect(FakeWebSocket.instances).toHaveLength(2);
 
@@ -82,20 +82,19 @@ describe("TerminalView の WebSocket 再接続", () => {
   });
 
   it("アンマウント後は close が来ても張り直さない", async () => {
-    vi.useFakeTimers();
-    const wrapper = mountTerminal();
+    const wrapper = await mountTerminal();
 
     const socket = latest();
     wrapper.unmount();
+    await flush();
     socket.triggerClose();
-    await vi.advanceTimersByTimeAsync(1_000);
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
 
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
 
   it("再接続のたびに新しい replay ゲートを使い、DA 応答の抑制をやり直す", async () => {
-    // xterm の write は内部で非同期に完了するので、fake timer とは相性が悪い。ここだけ実時間で進める。
-    const wrapper = mountTerminal();
+    const wrapper = await mountTerminal();
     const first = latest();
 
     // 1 回目の replay を消費させ、以後は抑制しない状態にしておく。書き込み完了を待つため長めに取る。
@@ -119,4 +118,33 @@ describe("TerminalView の WebSocket 再接続", () => {
 
     wrapper.unmount();
   }, 10_000);
+});
+
+describe("TerminalView の表示切り替え", () => {
+  it("選ばれていない間も要素を残し、hidden で隠すだけにする", async () => {
+    const wrapper = mount(<TerminalView sessionId="abc" visible={true} />);
+    await flush();
+    const terminal = wrapper.find(".terminal")!;
+    expect(terminal.className).not.toContain("hidden");
+
+    await wrapper.rerender(<TerminalView sessionId="abc" visible={false} />);
+
+    // 同じ要素のままであること（作り直されると画面が失われる）。
+    expect(wrapper.find(".terminal")).toBe(terminal);
+    expect(terminal.className).toContain("hidden");
+    // WebSocket も張り直されていない。
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    wrapper.unmount();
+  });
+
+  it("シェルとして開くと kind=shell で繋ぐ", async () => {
+    const wrapper = mount(<TerminalView sessionId="abc" visible={true} kind="shell" />);
+    await flush();
+
+    expect(latest().url).toContain("session=abc");
+    expect(latest().url).toContain("kind=shell");
+
+    wrapper.unmount();
+  });
 });

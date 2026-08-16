@@ -1,0 +1,101 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-backdrop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dialog {
+  /* 中の文字が倍率で伸びるので、箱も追従させないとパスが読めなくなる（Sidebar と同じ理由）。 */
+  width: calc(480px * var(--font-scale));
+  max-width: 90vw;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dialog-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  color: var(--text-strong);
+}
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+.dialog-input,
+.dialog-select {
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text-strong);
+  font-size: var(--fs-sm);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.dialog-input:focus,
+.dialog-select:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+}
+.recent {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  /* 倍率に追従させて、拡大しても見える履歴の件数が変わらないようにする。 */
+  max-height: calc(180px * var(--font-scale));
+  overflow-y: auto;
+}
+.recent-label {
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+}
+.recent-item {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text-link);
+  font-size: var(--fs-xs);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.recent-item:hover {
+  background: var(--bg-control);
+}
+.dialog-error {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-danger);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.dialog-actions button {
+  border: 1px solid var(--border-control);
+  background: var(--bg-control);
+  color: var(--text);
+  font-size: var(--fs-xs);
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dialog-actions .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+.dialog-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

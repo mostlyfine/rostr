@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mount } from "@vue/test-utils";
 import { SOUND_ENABLED_KEY, loadSoundEnabled, saveSoundEnabled } from "../../src/soundSettings";
 import type { Session } from "../../common/types";
+import { flush, mount } from "./helpers";
 
 beforeEach(() => {
   localStorage.clear();
@@ -42,40 +42,59 @@ describe("saveSoundEnabled", () => {
  * vi.resetModules() で作り直し、Sidebar も新しいインスタンスを掴むよう動的 import する。
  */
 const mountSidebar = async () => {
-  const Sidebar = (await import("../../src/components/Sidebar.vue")).default;
-  return mount(Sidebar, { props: { sessions: [] as Session[], selectedId: null } });
+  const { Sidebar } = await import("../../src/components/Sidebar");
+  const noop = () => {};
+  const wrapper = mount(
+    <Sidebar
+      sessions={[] as Session[]}
+      selectedId={null}
+      onSelect={noop}
+      onClose={noop}
+      onCreate={noop}
+    />,
+  );
+  await flush();
+  return wrapper;
 };
 
 describe("サウンドトグル", () => {
+  const mounted: { unmount: () => void }[] = [];
+
   beforeEach(() => {
     vi.resetModules();
   });
 
   afterEach(() => {
+    for (const wrapper of mounted.splice(0)) wrapper.unmount();
     localStorage.clear();
   });
 
-  it("既定ではオンのアイコンを表示する", async () => {
+  const sidebar = async () => {
     const wrapper = await mountSidebar();
-    expect(wrapper.find("[data-test=sound-toggle]").text()).toBe("🔔");
+    mounted.push(wrapper);
+    return wrapper;
+  };
+
+  it("既定ではオンのアイコンを表示する", async () => {
+    const wrapper = await sidebar();
+    expect(wrapper.text("[data-test=sound-toggle]")).toBe("🔔");
   });
 
   it("押すたびに on/off を往復し、選択を保存する", async () => {
-    const wrapper = await mountSidebar();
-    const toggle = wrapper.find("[data-test=sound-toggle]");
+    const wrapper = await sidebar();
 
-    await toggle.trigger("click");
-    expect(wrapper.find("[data-test=sound-toggle]").text()).toBe("🔕");
+    await wrapper.click("[data-test=sound-toggle]");
+    expect(wrapper.text("[data-test=sound-toggle]")).toBe("🔕");
     expect(localStorage.getItem(SOUND_ENABLED_KEY)).toBe("false");
 
-    await toggle.trigger("click");
-    expect(wrapper.find("[data-test=sound-toggle]").text()).toBe("🔔");
+    await wrapper.click("[data-test=sound-toggle]");
+    expect(wrapper.text("[data-test=sound-toggle]")).toBe("🔔");
     expect(localStorage.getItem(SOUND_ENABLED_KEY)).toBe("true");
   });
 
   it("保存済みの選択を反映する", async () => {
     localStorage.setItem(SOUND_ENABLED_KEY, "false");
-    const wrapper = await mountSidebar();
-    expect(wrapper.find("[data-test=sound-toggle]").text()).toBe("🔕");
+    const wrapper = await sidebar();
+    expect(wrapper.text("[data-test=sound-toggle]")).toBe("🔕");
   });
 });

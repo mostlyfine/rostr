@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>rostr</title>
     <!--
-      Vue のマウントを待つと、light を選んでいる人に一瞬ダークが見えてしまう。文字サイズも
+      アプリのマウントを待つと、light を選んでいる人に一瞬ダークが見えてしまう。文字サイズも
       同じで、拡大している人には一瞬小さい文字が見える。描画前にここで両方を確定させる。
-      判定は src/composables/useTheme.ts と src/fontScale.ts に合わせること。
+      判定は src/hooks/useTheme.ts と src/fontScale.ts に合わせること。
     -->
     <script>
       (function () {
@@ -31,6 +31,6 @@
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
