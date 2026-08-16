@@ -124,16 +124,32 @@ describe("TerminalView の表示切り替え", () => {
   it("選ばれていない間も要素を残し、hidden で隠すだけにする", async () => {
     const wrapper = mount(<TerminalView sessionId="abc" visible={true} />);
     await flush();
-    const terminal = wrapper.find(".terminal")!;
+    const terminal = wrapper.find(".terminal-pane")!;
     expect(terminal.className).not.toContain("hidden");
 
     await wrapper.rerender(<TerminalView sessionId="abc" visible={false} />);
 
     // 同じ要素のままであること（作り直されると画面が失われる）。
-    expect(wrapper.find(".terminal")).toBe(terminal);
+    expect(wrapper.find(".terminal-pane")).toBe(terminal);
     expect(terminal.className).toContain("hidden");
     // WebSocket も張り直されていない。
     expect(FakeWebSocket.instances).toHaveLength(1);
+
+    wrapper.unmount();
+  });
+
+  /*
+   * xterm は自分のルート要素に terminal クラスを付ける。枠の指定を同じ名前で書くと
+   * padding と背景が xterm 自身にも当たり、中身が内側へずれて xterm.css が
+   * .xterm-viewport に敷いている黒が縁として見えてしまう（light テーマで露見する）。
+   */
+  it("枠の指定に xterm が使う terminal クラスを使わない", async () => {
+    const wrapper = mount(<TerminalView sessionId="abc" visible={true} />);
+    await flush();
+
+    const xterm = wrapper.find(".xterm")!;
+    expect(xterm.classList.contains("terminal")).toBe(true);
+    expect(xterm.classList.contains("terminal-pane")).toBe(false);
 
     wrapper.unmount();
   });

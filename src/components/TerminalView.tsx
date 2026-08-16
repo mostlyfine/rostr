@@ -232,7 +232,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     return (
       <div
         ref={host}
-        class={classes("terminal", kind === "shell" && "shell", !visible && "hidden")}
+        class={classes("terminal-pane", kind === "shell" && "shell", !visible && "hidden")}
       />
     );
   },

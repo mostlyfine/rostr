@@ -1,5 +1,11 @@
-/* 親は flex 行。表示中のペインだけが並ぶので、等分するには伸縮の基準を 0 にしておく。 */
-.terminal {
+/*
+ * クラス名を terminal にしない。xterm は自分のルート要素へ terminal クラスを付けるので、
+ * その名前で書くと padding と背景が xterm 自身にも当たり、中身が内側へずれて
+ * xterm.css が .xterm-viewport に敷いている黒（#000）が縁として見えてしまう。
+ *
+ * 親は flex 行。表示中のペインだけが並ぶので、等分するには伸縮の基準を 0 にしておく。
+ */
+.terminal-pane {
   flex: 1 1 0;
   min-width: 0;
   height: 100%;
@@ -7,10 +13,10 @@
   box-sizing: border-box;
   background: var(--bg-app);
 }
-.terminal.shell {
+.terminal-pane.shell {
   border-left: 1px solid var(--border);
 }
 /* 選ばれていないターミナルは場所を取らずに残す。破棄すると画面が作り直される。 */
-.terminal.hidden {
+.terminal-pane.hidden {
   display: none;
 }
