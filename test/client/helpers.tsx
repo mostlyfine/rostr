@@ -30,6 +30,11 @@ export interface Wrapper {
   submit: (selector: string) => Promise<void>;
   /** 別の props で描き直す。親から渡す値が変わった場合の再現に使う。 */
   rerender: (node: Child) => Promise<void>;
+  /**
+   * 描き直しを始めるだけで、完了は待たない。useLayoutEffect が当てた直後の状態など、
+   * requestAnimationFrame より前の途中経過を見たいときに使う。
+   */
+  render: (node: Child) => void;
   unmount: () => void;
 }
 
@@ -86,6 +91,7 @@ export const mount = (node: Child): Wrapper => {
       root.render(next);
       await flush();
     },
+    render: (next: Child) => root.render(next),
     unmount: () => {
       root.unmount();
       el.remove();
